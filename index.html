@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#191b20">
+  <meta name="description" content="Cotiza productos y envío por peso en dólares y colones, con un cambio fijo de ₡500 por dólar.">
+  <title>Cotizador de pedidos</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23191b20'/%3E%3Ctext x='32' y='45' text-anchor='middle' font-family='Arial' font-size='42' font-weight='bold' fill='%23ffd23d'%3E%24%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">$</span>
+        <div><h1>Cotizador de pedidos</h1><p>Productos + envío</p></div>
+      </div>
+      <span class="exchange-pill" id="exchange-header">$1 = ₡500</span>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <div class="editor">
+      <section class="panel product-panel" aria-labelledby="products-heading">
+        <div class="panel-heading">
+          <div class="heading-group"><span class="step" aria-hidden="true">01</span><h2 id="products-heading">Productos del pedido</h2></div>
+          <span class="count-badge" id="unit-count">0 unidades</span>
+        </div>
+        <div id="product-list"></div>
+        <button type="button" class="button add-button" id="add-product"><span aria-hidden="true">+</span> Agregar producto</button>
+        <div class="product-subtotal">
+          <span>Subtotal de productos</span>
+          <div><strong id="products-usd">$0.00</strong><span id="products-crc">₡0</span></div>
+        </div>
+      </section>
+
+      <section class="panel shipping-panel" aria-labelledby="shipping-heading">
+        <div class="panel-heading"><div class="heading-group"><span class="step" aria-hidden="true">02</span><h2 id="shipping-heading">Peso y envío</h2></div></div>
+        <div class="shipping-entry">
+          <div class="field">
+            <label for="weight">Peso total del pedido</label>
+            <div class="input-shell"><input id="weight" type="text" inputmode="decimal" autocomplete="off" placeholder="0.0" aria-describedby="weight-error weight-hint" maxlength="20"><span class="input-suffix">kg</span></div>
+            <p class="field-error" id="weight-error" hidden></p>
+          </div>
+          <div class="shipping-price"><span>Costo de envío</span><strong id="shipping-usd">$0.00</strong><span id="shipping-crc">₡0</span></div>
+        </div>
+        <p class="field-hint" id="weight-hint">Ingresa el peso para aplicar la tarifa.</p>
+        <div class="tariff-table-wrapper">
+          <table class="tariff-table">
+            <caption>Tarifas de envío</caption>
+            <thead><tr><th scope="col">Peso del pedido</th><th scope="col">USD</th><th scope="col">CRC</th></tr></thead>
+            <tbody id="tariff-body"></tbody>
+          </table>
+        </div>
+        <div id="tax-breakdown" class="tax-breakdown" hidden></div>
+      </section>
+    </div>
+
+    <aside class="summary-column">
+      <section class="summary" aria-labelledby="summary-heading">
+        <div class="summary-heading"><h2 id="summary-heading">TOTAL DEL PEDIDO</h2><span class="estimate-badge">Estimado</span></div>
+        <p class="summary-count" id="summary-count">Agrega el primer producto</p>
+        <dl class="summary-lines">
+          <div><dt>Productos</dt><dd><strong id="summary-products-usd">$0.00</strong><span id="summary-products-crc">₡0</span></dd></div>
+          <div><dt>Envío</dt><dd><strong id="summary-shipping-usd">$0.00</strong><span id="summary-shipping-crc">₡0</span></dd></div>
+        </dl>
+        <div class="grand-total" aria-live="polite" aria-atomic="true">
+          <span class="total-label">TOTAL A PAGAR</span>
+          <div class="total-usd"><strong id="total-usd">$0.00</strong><span>USD</span></div>
+          <div class="total-crc"><strong id="total-crc">₡0</strong><span>CRC</span></div>
+        </div>
+        <p class="summary-status" id="summary-status">Agrega productos y peso para completar la cotización.</p>
+        <button type="button" class="button copy-button" id="copy-summary" disabled>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
+          Copiar resumen
+        </button>
+        <p class="estimate-note">Precotización. Confirma el monto final al pasar por caja.</p>
+      </section>
+      <button type="button" class="button clear-button" id="clear-quote">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6"/></svg>
+        Limpiar cotización
+      </button>
+      <p class="rate-note" id="exchange-note">Cambio fijo: $1 USD = ₡500 CRC</p>
+    </aside>
+  </main>
+
+  <div class="mobile-total" aria-hidden="true">
+    <div><span id="mobile-label">Total estimado</span><strong id="mobile-usd">$0.00 <small>USD</small></strong></div>
+    <div class="mobile-crc"><strong id="mobile-crc">₡0</strong><span>CRC</span></div>
+  </div>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <dialog id="manual-copy-dialog" aria-labelledby="manual-copy-title">
+    <h2 id="manual-copy-title">Resumen para copiar</h2>
+    <p>Tu navegador no permitió copiar automáticamente. Mantén presionado el texto o usa Ctrl+C.</p>
+    <label class="sr-only" for="manual-summary">Resumen de la cotización</label>
+    <textarea id="manual-summary" readonly></textarea>
+    <button class="button copy-button" id="close-copy-dialog" type="button">Cerrar</button>
+  </dialog>
+  <noscript><p class="noscript-message">Activa JavaScript en el navegador para utilizar el cotizador.</p></noscript>
+</body>
+</html>
