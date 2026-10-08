@@ -101,6 +101,7 @@ Pages publicará esos cambios automáticamente. Espera a que termine la publicac
 | No realiza cálculos | `script.js` debe estar junto a `index.html`; permite JavaScript en tu navegador. |
 | Error 404 en Pages | Espera la publicación; comprueba rama `main`, carpeta `/(root)` e `index.html` en la raíz. |
 | No ves una actualización | Confirma que guardaste los cambios en GitHub y que la publicación terminó; después recarga. |
+| El campo de cambio muestra 600 pero los cálculos siguen con 500 | Puedes estar viendo HTML nuevo con JavaScript anterior en caché. La aplicación usa enlaces versionados para los archivos CSS y JavaScript. Espera la publicación de la versión nueva y recarga; si aún aparece la anterior, abre el enlace en una ventana privada. |
 | No se activa Copiar resumen | Completa al menos un producto válido, el peso y cualquier campo marcado. |
 | Se bloquea la copia automática | Usa el texto seleccionable que abre la aplicación. |
 

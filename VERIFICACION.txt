@@ -36,3 +36,8 @@ CORRECTO: Sin desbordamiento horizontal en 320, 360, 390, 414, 430, 760 y 1280 p
 
 NO COMPROBADO: Apertura file://, bloqueada por la política del navegador de este entorno.
 La validación local no confirma una publicación nueva en GitHub Pages.
+
+ACTUALIZACIÓN DE ARCHIVOS EN CACHÉ
+REPRODUCIDO: HTML con campo editable y JavaScript anterior permiten escribir 600, pero muestran ₡17,500 para $35 en lugar de ₡21,000.
+CORRECCIÓN: index.html solicita CSS y JavaScript mediante URLs con versión para evitar reutilizar las URLs anteriores.
+CORRECTO: Con la ruta anterior de JavaScript simulada, la página nueva solicita la URL versionada y convierte $35 a ₡21,000 usando 600. Las 4 pruebas de interfaz siguen pasando.
