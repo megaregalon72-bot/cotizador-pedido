@@ -1,0 +1,23 @@
+VERIFICACIÓN DEL COTIZADOR DE PEDIDOS
+Fecha: 7 de octubre de 2026
+
+Funciones reales de script.js ejecutadas en Node.js; revisión de código HTML y CSS.
+
+CORRECTO: Prueba 1: $10 × 2; 5 kg → $35.00 / ₡17,500
+CORRECTO: Prueba 2: $20 × 2 + $5 × 3; 15 kg → $85.00 / ₡42,500
+CORRECTO: Prueba 3: $100 × 1; 25 kg → $140.00 / ₡70,000
+CORRECTO: Fronteras de envío sin huecos
+CORRECTO: Precios y pesos: negativos, letras, infinito y exponentes rechazados
+CORRECTO: Cantidad: cero, negativos, fracciones y texto rechazados
+CORRECTO: Vacíos seguros y precio cero válido
+CORRECTO: Punto y coma decimal; exceso de precisión rechazado
+CORRECTO: Centavos exactos, multiplicación y separación de miles
+CORRECTO: IVA sin tasa: importe final intacto
+CORRECTO: IVA futuro: desglose conserva exactamente neto + IVA = tarifa final
+CORRECTO: sintaxis JavaScript (node --check).
+CORRECTO: referencias locales, IDs únicos y etiquetas de campos en el HTML.
+
+ALCANCE Y LIMITACIÓN
+No se ejecutó la interfaz en un navegador: el entorno no dispone de un navegador de pruebas y no pudo instalarse. Los tamaños móviles, las interacciones visuales y el portapapeles requieren comprobación en un navegador.
+
+No se publicó una página en una cuenta de GitHub. El proyecto incluye instrucciones para hacerlo.
