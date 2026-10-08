@@ -4,6 +4,10 @@ Aplicación local en HTML, CSS y JavaScript para precotizar productos y envío. 
 
 ## Uso de la aplicación
 
+En la parte superior, modifica **Tipo de cambio · colones por dólar**: escribe `600` para usar **$1 = ₡600**, por ejemplo. Admite punto o coma y hasta 2 decimales, con valores mayores que cero y hasta 1,000,000. Todos los importes en colones y el resumen se actualizan de inmediato; los precios en dólares se mantienen. Un cambio vacío o inválido oculta la conversión y bloquea la copia hasta corregirlo.
+
+El último cambio válido se recuerda en ese navegador, si permite almacenamiento local. **Limpiar cotización** conserva el tipo de cambio. En un navegador nuevo se usa `500`; si el almacenamiento está bloqueado, puedes modificarlo durante la sesión.
+
 1. Escribe el precio unitario en dólares y la cantidad del producto.
 2. Usa **+ Agregar producto** para cada precio diferente. Para unidades al mismo precio, cambia la cantidad.
 3. Escribe el peso total en kilogramos. Se aplica automáticamente el envío.
@@ -25,7 +29,7 @@ Si el navegador bloquea el portapapeles, la aplicación intenta una segunda ruta
 | Más de 10 hasta 20 kg, inclusive | $30.00 | ₡15,000 |
 | Más de 20 kg | $40.00 | ₡20,000 |
 
-Cambio fijo: **$1 USD = ₡500 CRC**. Por ejemplo, 10.01 kg cae en la segunda tarifa y 20.01 kg, en la tercera. No hay huecos entre rangos. El total es subtotal de productos + envío. Las tarifas son finales y no reciben ningún recargo de IVA.
+La tabla muestra la conversión inicial de **$1 USD = ₡500 CRC**. Puedes cambiarla desde la cabecera; con `600`, los envíos equivalen a ₡9,000, ₡18,000 y ₡24,000. Por ejemplo, 10.01 kg cae en la segunda tarifa y 20.01 kg, en la tercera. No hay huecos entre rangos. El total es subtotal de productos + envío. Las tarifas son finales y no reciben ningún recargo de IVA.
 
 ## Publicación gratuita: Visual Studio Code + GitHub + GitHub Pages
 
@@ -45,7 +49,7 @@ Si estás empezando con una carpeta vacía, haz clic derecho sobre la carpeta en
 
 ### 3. Probar en tu computadora
 
-Abre la carpeta con el Explorador de Windows y haz doble clic en `index.html`. Si Windows pregunta con qué programa abrirlo, elige Chrome, Edge o Firefox. Ingresa precio `10`, cantidad `2` y peso `5`. Debes obtener **$35.00 USD / ₡17,500 CRC**. Prueba **Copiar resumen** y pégalo en el Bloc de notas con Ctrl+V. Después presiona **Limpiar cotización** y revisa que los importes regresen a cero. La apertura local funciona sin Internet.
+Abre la carpeta con el Explorador de Windows y haz doble clic en `index.html`. Si Windows pregunta con qué programa abrirlo, elige Chrome, Edge o Firefox. Configura el cambio en `500`, e ingresa precio `10`, cantidad `2` y peso `5`. Debes obtener **$35.00 USD / ₡17,500 CRC**; cambia a `600` y verifica **$35.00 USD / ₡21,000 CRC**. Prueba **Copiar resumen** y pégalo en el Bloc de notas con Ctrl+V. Después presiona **Limpiar cotización** y revisa que los importes regresen a cero y el cambio se conserve. La aplicación no necesita Internet.
 
 ### 4. Crear una cuenta o iniciar sesión en GitHub
 
@@ -104,12 +108,12 @@ Pages publicará esos cambios automáticamente. Espera a que termine la publicac
 
 Al comienzo de `script.js` se encuentran las constantes:
 
-- `USD_TO_CRC`: conversión en colones enteros por cada dólar; actualmente `500`.
+- `DEFAULT_USD_TO_CRC`: cambio inicial por cada dólar; actualmente `500`. El usuario puede modificarlo en la cabecera sin editar código.
 - `SHIPPING_RATES`: límite superior de cada rango y precio final en centavos. `1500n` equivale a $15.00. La última tarifa usa `maxKg: null`, que significa sin límite superior. Si cambias los límites, actualiza también sus textos `label`.
 - `IVA_CONFIG.rateBasisPoints`: `null` significa tasa no definida. Para configurar una tasa confirmada comercialmente, escribe el porcentaje multiplicado por 100, como entero. La app muestra entonces el desglose del envío: precio sin IVA, IVA y precio con IVA. Se extrae del precio final; no altera el total comercial. No se asignó una tasa real.
 - `LIMITS`: máximos admitidos por precio, cantidad y peso.
 
-Los importes se calculan en centavos enteros con BigInt; el redondeo sólo se usa para un eventual desglose de IVA. En ese desglose, precio sin IVA + IVA coincide exactamente con el precio final. No se agrega IVA adicional a los precios de productos ingresados por el vendedor.
+Los importes y el tipo de cambio se calculan en centavos enteros con BigInt; la conversión a colones se redondea al centavo más cercano. También se redondea un eventual desglose de IVA. En ese desglose, precio sin IVA + IVA coincide exactamente con el precio final. No se agrega IVA adicional a los precios de productos ingresados por el vendedor.
 
 ## Comprobaciones realizadas
 
@@ -123,7 +127,7 @@ Se ejecutaron las funciones reales de `script.js` en Node.js para comprobar los 
 
 También pasaron pruebas de fronteras de peso, decimales, cantidades inválidas, negativos, campos vacíos, centavos exactos y conservación del importe al desglosar un IVA de prueba. Consulta `VERIFICACION.txt` para conocer el alcance.
 
-**Límite de la revisión:** no se pudo ejecutar una comprobación visual ni interactiva en un navegador de pruebas en este entorno. El CSS se preparó para los anchos de 360, 390, 414 y 430 px, pero su apariencia y el comportamiento del portapapeles necesitan confirmación en un navegador real. No se afirma que se hayan verificado visualmente esos tamaños.
+**Versión con cambio editable, 8 de octubre de 2026:** se comprobó la interfaz en Chromium mediante HTTP local: actualización de todas las conversiones y tarifas, portapapeles y resumen manual, conservación del cambio al recargar y limpiar, decimales, valores inválidos, preferencias corruptas y almacenamiento bloqueado. Se verificó que no hubiera desbordamiento horizontal en 320, 360, 390, 414, 430, 760 y 1280 px, y se revisaron capturas de móvil y escritorio. La apertura directa mediante `file://` no pudo comprobarse porque la política del navegador de este entorno bloquea esas direcciones. Estas pruebas no confirman una publicación nueva en GitHub Pages.
 
 ## Fuentes oficiales de la guía
 

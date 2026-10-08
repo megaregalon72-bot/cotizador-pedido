@@ -18,6 +18,21 @@ CORRECTO: sintaxis JavaScript (node --check).
 CORRECTO: referencias locales, IDs únicos y etiquetas de campos en el HTML.
 
 ALCANCE Y LIMITACIÓN
-No se ejecutó la interfaz en un navegador: el entorno no dispone de un navegador de pruebas y no pudo instalarse. Los tamaños móviles, las interacciones visuales y el portapapeles requieren comprobación en un navegador.
+La entrega original del 7 de octubre no se ejecutó en un navegador. Las comprobaciones siguientes corresponden a la versión con cambio editable del 8 de octubre de 2026.
 
-No se publicó una página en una cuenta de GitHub. El proyecto incluye instrucciones para hacerlo.
+CAMBIO EDITABLE: COMPROBACIONES EN CHROMIUM MEDIANTE HTTP LOCAL
+CORRECTO: $10 × 2; 5 kg; cambio 500 → $35.00 / ₡17,500.
+CORRECTO: El mismo pedido con cambio 600 → $35.00 / ₡21,000.
+CORRECTO: Cambio 600 actualiza líneas, subtotales, envío, total, total móvil y tarifas.
+CORRECTO: Resumen en el portapapeles real y resumen manual incluyen el cambio actual.
+CORRECTO: Recargar y limpiar conservan el último cambio válido.
+CORRECTO: Cambios con punto y coma decimal, y redondeo de medios centavos.
+CORRECTO: Vacío, cero, negativos, letras, exponentes, Infinity, separadores de miles, exceso de precisión y exceso del límite se rechazan.
+CORRECTO: Cambio inválido oculta colones, bloquea copia y no sustituye la preferencia válida.
+CORRECTO: Límites positivos 0.01 y 1,000,000; recuperación después de un error.
+CORRECTO: Varios productos y fronteras de envío.
+CORRECTO: Preferencia corrupta recupera 500; almacenamiento bloqueado permite cotizar.
+CORRECTO: Sin desbordamiento horizontal en 320, 360, 390, 414, 430, 760 y 1280 px; capturas de móvil y escritorio revisadas.
+
+NO COMPROBADO: Apertura file://, bloqueada por la política del navegador de este entorno.
+La validación local no confirma una publicación nueva en GitHub Pages.

@@ -29,7 +29,11 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .brand { display: flex; align-items: center; gap: 11px; }
 .brand-mark { width: 42px; height: 46px; border-radius: 12px; background: var(--ink); color: var(--yellow); display: grid; place-items: center; font-size: 1.6rem; font-weight: 800; }
 .brand p { font-size: .875rem; color: var(--muted); margin-top: 3px; }
-.exchange-pill { font-size: .875rem; font-weight: 700; background: #fff6d7; border: 1px solid #f1dda0; border-radius: 8px; padding: 7px 10px; white-space: nowrap; }
+.exchange-control { width: 260px; max-width: 100%; }
+.exchange-control label { font-size: .8125rem; margin-bottom: 5px; }
+.input-shell.exchange-shell { background: #fff6d7; border-color: #f1dda0; }
+.exchange-shell .input-prefix { color: var(--ink); white-space: nowrap; font-weight: 700; }
+.exchange-shell input { text-align: right; }
 .workspace { max-width: 1160px; margin: auto; padding: 20px 16px 132px; display: grid; gap: 20px; }
 .editor, .summary-column { min-width: 0; }
 .editor { display: grid; gap: 20px; align-content: start; }
