@@ -4,11 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#191b20">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co ws://localhost:* ws://127.0.0.1:*; base-uri 'self'; form-action 'self'; object-src 'none'">
   <meta name="description" content="Cotiza productos y envío por peso en dólares y colones, con un tipo de cambio que puedes ajustar.">
   <title>Cotizador de pedidos</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23191b20'/%3E%3Ctext x='32' y='45' text-anchor='middle' font-family='Arial' font-size='42' font-weight='bold' fill='%23ffd23d'%3E%24%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="style.css?v=20261008-2">
-  <script src="script.js?v=20261008-2" defer></script>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./src/app.js"></script>
 </head>
 <body>
   <header class="app-header">
@@ -17,7 +18,7 @@
         <span class="brand-mark" aria-hidden="true">$</span>
         <div><h1>Cotizador de pedidos</h1><p>Productos + envío</p></div>
       </div>
-      <div class="exchange-control">
+      <div class="exchange-control" id="exchange-control" hidden>
         <label for="exchange-rate">Tipo de cambio · colones por dólar</label>
         <div class="input-shell exchange-shell">
           <span class="input-prefix" aria-hidden="true">$1 = ₡</span>
@@ -29,8 +30,36 @@
     </div>
   </header>
 
-  <main class="workspace">
+  <section class="login-view" id="login-view" aria-labelledby="login-heading">
+    <form class="panel login-panel" id="login-form">
+      <span class="estimate-badge login-badge">Acceso del equipo</span>
+      <h2 id="login-heading">Bienvenido al cotizador</h2>
+      <p class="field-hint">Ingresa con tu usuario y contraseña. Las cuentas las crea el administrador.</p>
+      <div class="field"><label for="login-username">Nombre de usuario</label><div class="input-shell"><input id="login-username" name="username" autocomplete="username" required maxlength="32" autocapitalize="none" spellcheck="false"></div></div>
+      <div class="field"><label for="login-password">Contraseña</label><div class="input-shell"><input id="login-password" name="password" type="password" autocomplete="current-password" required maxlength="128"></div></div>
+      <p id="login-status" class="form-status" role="status" aria-live="polite">Comprobando conexión…</p>
+      <button class="button copy-button" id="login-submit" type="submit">Iniciar sesión</button>
+    </form>
+  </section>
+  <div class="app-toolbar" id="app-toolbar" hidden>
+    <nav class="app-nav" aria-label="Módulos">
+      <button type="button" class="nav-button active" data-view="quote">Cotizador</button>
+      <button type="button" class="nav-button" data-view="history">Mis cotizaciones</button>
+      <button type="button" class="nav-button" data-view="audit" data-admin hidden>Auditoría</button>
+      <button type="button" class="nav-button" data-view="users" data-admin hidden>Usuarios</button>
+    </nav>
+    <div class="session-controls"><span id="session-name"></span><button type="button" class="small-button" id="logout-button">Cerrar sesión</button></div>
+  </div>
+  <p class="app-message" id="app-message" role="status" aria-live="polite" hidden></p>
+
+  <main class="workspace" id="quote-view" hidden>
     <div class="editor">
+      <section class="panel client-panel" aria-labelledby="client-heading">
+        <div class="panel-heading"><h2 id="client-heading">Datos del cliente</h2><span class="count-badge" id="editing-number">Nueva cotización</span></div>
+        <div class="field"><label for="customer-name">NOMBRE DEL CLIENTE</label><div class="input-shell"><input id="customer-name" type="text" autocomplete="name" maxlength="120" placeholder="Nombre completo del cliente" aria-describedby="customer-error" data-error="customer-error"></div><p class="field-error" id="customer-error" hidden></p></div>
+        <p class="form-status" id="save-status" aria-live="polite">Completa el cliente, los productos y el peso para guardar automáticamente.</p>
+        <button class="small-button" id="save-quote" type="button">Guardar ahora</button>
+      </section>
       <section class="panel product-panel" aria-labelledby="products-heading">
         <div class="panel-heading">
           <div class="heading-group"><span class="step" aria-hidden="true">01</span><h2 id="products-heading">Productos del pedido</h2></div>
@@ -92,14 +121,47 @@
       </button>
       <p class="rate-note" id="exchange-note">Tipo de cambio: $1 USD = ₡500 CRC</p>
       <footer class="app-watermark" aria-label="Créditos de creación">
-        <span>CREANDO POR <strong>ERICK GONZALEZ</strong></span>
-        <span>CON HERRAMIENTAS DE INTELIGENCIA ARTIFICIAL</span>
-        <span>DERECHOS RESERVADOS</span>
+        <span>© <span data-current-year></span> Erick Gonzalez · Todos los derechos reservados.</span>
       </footer>
     </aside>
   </main>
 
-  <div class="mobile-total" aria-hidden="true">
+  <section class="management-view" id="history-view" aria-labelledby="history-heading" hidden>
+    <div class="panel"><div class="panel-heading"><h2 id="history-heading">Mis cotizaciones</h2><button type="button" class="small-button" id="export-quotes">Exportar resultados a CSV</button></div>
+      <form id="quote-filters" class="filters-grid">
+        <div class="field"><label for="filter-customer">Cliente</label><input id="filter-customer" type="search" maxlength="120" placeholder="Buscar cliente"></div>
+        <div class="field" id="filter-user-field" hidden><label for="filter-user">Usuario</label><input id="filter-user" type="search" maxlength="32"></div>
+        <div class="field"><label for="filter-number">Número de cotización</label><input id="filter-number" type="search" maxlength="32" placeholder="COT-00000001"></div>
+        <div class="field"><label for="filter-status">Estado</label><select id="filter-status"><option value="">Todos</option><option value="draft">Borrador</option><option value="sent">Enviada</option><option value="confirmed">Confirmada</option><option value="cancelled">Cancelada</option></select></div>
+        <div class="field"><label for="filter-from">Desde (Panamá)</label><input id="filter-from" type="date"></div>
+        <div class="field"><label for="filter-to">Hasta (Panamá)</label><input id="filter-to" type="date"></div>
+        <div class="field"><label for="filter-sort">Orden</label><select id="filter-sort"><option value="desc">Más recientes</option><option value="asc">Más antiguas</option></select></div>
+        <button class="small-button" type="submit">Buscar</button>
+      </form>
+      <p class="form-status" id="history-status" role="status"></p>
+      <div class="data-table-wrapper"><table class="data-table"><thead><tr><th>ID</th><th>Usuario</th><th>Cliente</th><th>Fecha</th><th>Hora</th><th>Productos</th><th>Subtotal USD</th><th>Envío USD</th><th>Total USD</th><th>Total CRC</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="quotes-body"></tbody></table></div>
+      <div class="pagination"><button type="button" class="small-button" id="quotes-prev">Anterior</button><span id="quotes-page"></span><button type="button" class="small-button" id="quotes-next">Siguiente</button></div>
+    </div>
+  </section>
+  <section class="management-view" id="audit-view" aria-labelledby="audit-heading" hidden>
+    <div class="panel"><div class="panel-heading"><h2 id="audit-heading">Panel administrativo de auditoría</h2><button type="button" class="small-button" id="all-quotes-button">Ver todas las cotizaciones</button></div>
+      <div class="stats-grid" id="stats-grid"></div>
+      <form id="audit-filters" class="filters-grid"><div class="field"><label for="audit-user">Usuario</label><input id="audit-user" type="search" maxlength="32"></div><div class="field"><label for="audit-action">Acción</label><select id="audit-action"><option value="">Todas</option><option value="quote_created">Cotización creada</option><option value="quote_updated">Cotización modificada</option><option value="quote_status_changed">Cambio de estado</option><option value="quote_cancelled">Cancelación</option><option value="user_created">Usuario creado</option><option value="user_updated">Usuario modificado</option><option value="user_deactivated">Usuario desactivado</option><option value="user_reactivated">Usuario reactivado</option><option value="password_reset">Contraseña restablecida</option><option value="login">Inicio de sesión</option><option value="logout">Cierre de sesión</option></select></div><button type="submit" class="small-button">Filtrar eventos</button></form>
+      <p class="form-status" id="audit-status" role="status"></p><div class="data-table-wrapper"><table class="data-table"><thead><tr><th>Usuario</th><th>Acción</th><th>Fecha</th><th>Hora</th><th>Registro</th><th>Detalle</th></tr></thead><tbody id="audit-body"></tbody></table></div>
+      <div class="pagination"><button type="button" class="small-button" id="audit-prev">Anterior</button><span id="audit-page"></span><button type="button" class="small-button" id="audit-next">Siguiente</button></div>
+    </div>
+  </section>
+  <section class="management-view" id="users-view" aria-labelledby="users-heading" hidden>
+    <div class="panel"><div class="panel-heading"><h2 id="users-heading">Gestión de usuarios</h2></div>
+      <form id="user-form" class="filters-grid"><input id="user-id" type="hidden"><div class="field"><label for="user-username">Usuario</label><input id="user-username" required minlength="3" maxlength="32" autocomplete="off" autocapitalize="none"></div><div class="field"><label for="user-display-name">Nombre</label><input id="user-display-name" required maxlength="100"></div><div class="field"><label for="user-role">Rol</label><select id="user-role"><option value="seller">Vendedor</option><option value="admin">Administrador</option></select></div><div class="field"><label for="user-password">Contraseña inicial (mínimo 12 caracteres)</label><input id="user-password" type="password" required minlength="12" maxlength="128" autocomplete="new-password"></div><button type="submit" class="small-button" id="user-submit">Crear usuario</button><button type="button" class="small-button" id="user-cancel" hidden>Cancelar edición</button></form>
+      <p class="form-status" id="users-status" role="status"></p><div class="data-table-wrapper"><table class="data-table"><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Cuenta</th><th>Acciones</th></tr></thead><tbody id="users-body"></tbody></table></div>
+    </div>
+  </section>
+  <dialog id="quote-detail-dialog" aria-labelledby="quote-detail-title"><div class="panel-heading"><h2 id="quote-detail-title">Detalle de cotización</h2><button class="small-button" type="button" data-close-dialog>Cerrar</button></div><div id="quote-detail-content"></div><div class="detail-actions" id="quote-detail-actions"></div></dialog>
+  <dialog id="event-detail-dialog" aria-labelledby="event-detail-title"><div class="panel-heading"><h2 id="event-detail-title">Detalle del evento</h2><button class="small-button" type="button" data-close-dialog>Cerrar</button></div><pre id="event-detail-content"></pre></dialog>
+  <dialog id="password-dialog" aria-labelledby="password-heading"><form id="password-form"><h2 id="password-heading">Restablecer contraseña</h2><input id="password-user-id" type="hidden"><p id="password-user-name"></p><label for="reset-password">Nueva contraseña (mínimo 12 caracteres)</label><div class="input-shell"><input id="reset-password" type="password" required minlength="12" maxlength="128" autocomplete="new-password"></div><p id="password-status" class="form-status" role="status"></p><div class="detail-actions"><button class="small-button" type="submit">Guardar contraseña</button><button class="small-button" type="button" data-close-dialog>Cancelar</button></div></form></dialog>
+
+  <div class="mobile-total" id="mobile-total" aria-hidden="true" hidden>
     <div><span id="mobile-label">Total estimado</span><strong id="mobile-usd">$0.00 <small>USD</small></strong></div>
     <div class="mobile-crc"><strong id="mobile-crc">₡0</strong><span>CRC</span></div>
   </div>

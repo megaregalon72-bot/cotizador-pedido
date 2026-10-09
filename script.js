@@ -118,6 +118,7 @@ function renumberRows() {
   });
 }
 function addProduct(focus = true) {
+  if (elements.list.children.length >= 100) { showToast("Puedes cotizar hasta 100 productos por pedido."); return; }
   const id = ++nextId;
   const row = document.createElement("div");
   row.className = "product-row";
@@ -126,6 +127,7 @@ function addProduct(focus = true) {
     <div class="row-heading"><span class="row-name"></span>
       <button type="button" class="delete-button" title="Eliminar producto"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6"/></svg></button>
     </div>
+    <div class="field description-field"><label for="description-${id}">Descripción del producto (opcional)</label><div class="input-shell"><input id="description-${id}" class="description-input" type="text" maxlength="120" placeholder="Nombre o referencia del producto"></div></div>
     <div class="row-fields">
       <div class="field"><label for="price-${id}">Precio unitario (USD)</label>
         <div class="input-shell"><span class="input-prefix" aria-hidden="true">$</span><input id="price-${id}" class="price-input" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" maxlength="16" aria-describedby="price-error-${id}" data-error="price-error-${id}"></div>
@@ -136,6 +138,7 @@ function addProduct(focus = true) {
         <p class="field-error" id="quantity-error-${id}" hidden></p>
       </div>
     </div>
+    <label class="checkbox-label"><input class="tax-exempt-input" type="checkbox"> Producto exento (registro; no agrega impuestos)</label>
     <div class="line-subtotal"><span>Subtotal</span><div class="line-money"><strong class="line-usd">$0.00</strong><span class="line-crc">₡0</span></div></div>`;
   elements.list.append(row);
   renumberRows();
@@ -208,7 +211,8 @@ function updateQuote() {
   const hasError = hasAmountError || Boolean(exchangeRate.error);
   const total = subtotal + shipping;
   const ready = productCount > 0 && hasWeight && !hasError;
-  lastQuote = { subtotal, shipping, total, units, productCount, ready, exchangeRateCents };
+  lastQuote = { subtotal, shipping, total, units, productCount, ready, exchangeRateCents,
+    customerName: document.getElementById("customer-name")?.value.trim() || "" };
 
   setMoneyPair("products", subtotal, hasInvalidProduct);
   setMoneyPair("summary-products", subtotal, hasInvalidProduct);
@@ -227,6 +231,7 @@ function updateQuote() {
   elements.status.classList.toggle("error", hasError);
   elements.status.textContent = hasError ? "Corrige los campos marcados para obtener el total." : ready ? "Lista para compartir con el cliente." : productCount === 0 ? "Agrega productos y peso para completar la cotización." : "Total parcial: falta el peso para incluir el envío.";
   renderTax(shipping, hasWeight);
+  document.dispatchEvent(new CustomEvent("quote:changed"));
 }
 function clearQuote() {
   elements.list.replaceChildren();
@@ -239,7 +244,7 @@ function clearQuote() {
 }
 function summaryText(quote) {
   return [
-    "COTIZACIÓN ESTIMADA", "",
+    "COTIZACIÓN ESTIMADA", ...(quote.customerName ? ["Cliente: " + quote.customerName] : []), "",
     "Productos (" + integerFormatter.format(quote.units) + " unidades): " + usd(quote.subtotal) + " / " + crc(quote.subtotal, quote.exchangeRateCents),
     "Envío: " + usd(quote.shipping) + " / " + crc(quote.shipping, quote.exchangeRateCents), "",
     "TOTAL:", usd(quote.total) + " USD", crc(quote.total, quote.exchangeRateCents) + " CRC", "",
@@ -297,3 +302,35 @@ elements.copy.addEventListener("click", copySummary);
 document.getElementById("close-copy-dialog").addEventListener("click", () => elements.dialog.close());
 restoreExchangeRate();
 addProduct(false);
+
+function decimalInput(value, decimals = 2) {
+  const n = BigInt(value); const scale = 10n ** BigInt(decimals);
+  return (n / scale).toString() + "." + (n % scale).toString().padStart(decimals, "0");
+}
+function currentSnapshot() {
+  if (!lastQuote?.ready) return null;
+  const items = [...elements.list.children].flatMap(row => {
+    const price = parsePrice(row.querySelector(".price-input").value);
+    const quantity = parseQuantity(row.querySelector(".quantity-input").value);
+    if (price.value === null || quantity.value === null) return [];
+    return [{ description: row.querySelector(".description-input").value.trim() || row.querySelector(".row-name").textContent,
+      unit_price_cents: price.value.toString(), quantity: Number(quantity.value),
+      tax_exempt: row.querySelector(".tax-exempt-input").checked }];
+  });
+  return { items, exchange_rate_cents: exchangeRateCents.toString(), weight_micros: parseWeight(elements.weight.value).value.toString() };
+}
+function loadSnapshot(snapshot) {
+  elements.list.replaceChildren();
+  elements.exchangeRate.value = decimalInput(snapshot.exchange_rate_cents);
+  elements.weight.value = decimalInput(snapshot.weight_micros, 6);
+  for (const item of snapshot.items) {
+    addProduct(false);
+    const row = elements.list.lastElementChild;
+    row.querySelector(".price-input").value = decimalInput(item.unit_price_cents);
+    row.querySelector(".quantity-input").value = String(item.quantity);
+    row.querySelector(".description-input").value = item.description;
+    row.querySelector(".tax-exempt-input").checked = item.tax_exempt;
+  }
+  updateQuote();
+}
+window.Cotizador = Object.freeze({ getSnapshot: currentSnapshot, loadSnapshot, clearQuote, refresh: updateQuote });

@@ -41,3 +41,39 @@ ACTUALIZACIÓN DE ARCHIVOS EN CACHÉ
 REPRODUCIDO: HTML con campo editable y JavaScript anterior permiten escribir 600, pero muestran ₡17,500 para $35 en lugar de ₡21,000.
 CORRECCIÓN: index.html solicita CSS y JavaScript mediante URLs con versión para evitar reutilizar las URLs anteriores.
 CORRECTO: Con la ruta anterior de JavaScript simulada, la página nueva solicita la URL versionada y convierte $35 a ₡21,000 usando 600. Las 4 pruebas de interfaz siguen pasando.
+
+VERSIÓN CON SUPABASE: VERIFICACIÓN LOCAL DEL 9 DE OCTUBRE DE 2026
+Rama: feat/supabase-cotizaciones. No sustituye todavía la versión publicada de main.
+
+CORRECTO: npm ci reproduce la instalación desde package-lock.json con TLS activo.
+CORRECTO: npm test ejecutó 23 pruebas: 23 aprobadas, 0 fallidas, 0 omitidas.
+CORRECTO: La migración completa se ejecutó en PostgreSQL local mediante PGlite.
+CORRECTO: RLS de las seis tablas, separación vendedor/administrador, acceso anónimo y escrituras directas bloqueadas.
+CORRECTO: Metadata de Auth no concede rol administrativo; nombres duplicados se rechazan.
+CORRECTO: Desactivación bloquea operaciones con una identidad de sesión todavía existente; se protege al último administrador activo.
+CORRECTO: Cálculos originales, cambio 500/600/600.25, límites y totales recalculados en el servidor.
+CORRECTO: Reintentos idempotentes, conflictos de revisión, cliente, exenciones, cambio histórico, revisiones y eventos.
+CORRECTO: Estados, búsquedas, filtros, paginación y estadísticas autorizadas en PostgreSQL.
+CORRECTO: Controles de la función admin-users frente a token inválido, vendedor, inactivo y origen no permitido, usando un cliente Auth de prueba.
+CORRECTO: Identificador técnico de usuario, validación, importes exactos, fechas de Panamá y CSV protegido contra fórmulas.
+CORRECTO: npm run check:functions, comprobación TypeScript de la función y utilidades compartidas.
+CORRECTO: npm run build produjo dist con archivos CSS/JavaScript con hash.
+CORRECTO: npm run test:ui ejecutó 8 pruebas Chromium: 8 aprobadas, 0 fallidas, 0 omitidas.
+CORRECTO: Interfaz de acceso, guardado, recuperación tras recarga, error/reintento, historial, administración, desactivación y cierre de sesión.
+CORRECTO: Edición, cambio de estado, copia con ID nuevo y descarga CSV desde el navegador.
+CORRECTO: Datos del cliente se renderizan como texto; vista móvil sin desbordamiento del documento; capturas de cotizador, auditoría y móvil revisadas.
+CORRECTO: Sin errores JavaScript no controlados en los flujos de navegador comprobados.
+CORRECTO: El build de producción servido por HTTP local responde 200; sin clave pública muestra conexión pendiente y mantiene protegidos los módulos.
+CORRECTO: npm audit --omit=dev encontró 0 vulnerabilidades conocidas en dependencias de producción en esta fecha.
+CORRECTO: .env, archivos privados de bootstrap, dependencias, dist y resultados de pruebas están ignorados por Git.
+
+LÍMITES DE ESTA VERIFICACIÓN
+PGlite ejecuta PostgreSQL real y las políticas reales, pero las pruebas proporcionan la identidad que normalmente establece Supabase.
+Las pruebas de interfaz y de admin-users usan respuestas controladas. No verifican contraseñas, tokens reales ni despliegues del proyecto externo.
+La aplicación entregada no contiene modo de demostración: usa el SDK y las operaciones reales de Supabase cuando se configura.
+URL pública incorporada a la configuración local ignorada: https://ejycazhhvtwcuvdxysxg.supabase.co.
+PENDIENTE: clave pública publishable/anon, migración en el proyecto real, despliegue de admin-users, ALLOWED_ORIGINS y administrador inicial.
+NO COMPROBADO: acceso, almacenamiento, RLS y administración contra ese proyecto real. Sigue los pasos 10–12 de GUIA_SUPABASE.md.
+NO PUBLICADO: este build no se ha desplegado en GitHub Pages; primero completa la configuración y sigue el paso 13 de la guía.
+El entorno restringe destinos externos: para verificación remota necesita permitir el dominio del proyecto y, para Pages, api.github.com y megaregalon72-bot.github.io.
+El servicio de configuración informó que el borrador del entorno no está disponible; no pudo persistir install_script/start_skill ni requisitos de variables. La guía conserva las instrucciones de instalación y arranque.

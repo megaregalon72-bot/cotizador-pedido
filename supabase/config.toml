@@ -1,0 +1,9 @@
+project_id = "cotizador-pedido"
+
+[auth]
+enable_signup = false
+minimum_password_length = 12
+
+[functions.admin-users]
+# La función valida el JWT con Auth.getUser y vuelve a comprobar el rol en PostgreSQL.
+verify_jwt = false
