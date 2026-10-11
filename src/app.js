@@ -13,10 +13,11 @@ const actionLabels = { login: 'Inicio de sesión', logout: 'Cierre de sesión', 
   password_reset_requested: 'Restablecimiento solicitado', admin_bootstrapped: 'Administrador inicial creado', user_provisioned: 'Cuenta técnica creada (inactiva)' };
 
 function status(id, text, error = false) { $(id).textContent = text; $(id).classList.toggle('error', error); }
-function message(text, error = false) { $('app-message').hidden = !text; status('app-message', text, error); }
+let messageScope = null;
+function message(text, error = false, scope = null) { messageScope = text ? scope : null; $('app-message').hidden = !text; status('app-message', text, error); }
 function cell(row, text) { const td = document.createElement('td'); td.textContent = String(text ?? ''); row.append(td); return td; }
 function button(text, action) { const b = document.createElement('button'); b.type = 'button'; b.className = 'small-button'; b.textContent = text; b.addEventListener('click', () => run(action)); return b; }
-async function run(action) { try { await action(); } catch (error) { message(error.message || 'No se pudo completar la operación.', true); } }
+async function run(action, scope = null) { try { await action(); } catch (error) { message(error.message || 'No se pudo completar la operación.', true, scope); } }
 function clearPrivateData() {
   state.epoch++; state.profile = null; state.id = crypto.randomUUID(); state.revision = 0; state.saved = ''; state.users = []; state.detail = null;
   clearTimeout(state.timer); state.hydrating = true; $('customer-name').value = ''; window.Cotizador.clearQuote(); state.hydrating = false;
@@ -75,9 +76,10 @@ function queueSave() {
   if (!state.profile || state.hydrating) return;
   updateCustomerValidity(); clearTimeout(state.timer);
   let next; try { next = payload(); } catch { return; }
-  if (!next || JSON.stringify(next) === state.saved) return;
+  if (!next) return;
+  if (JSON.stringify(next) === state.saved) { if (messageScope === 'save') message(''); return; }
   status('save-status', 'Cambios pendientes; se guardarán automáticamente…');
-  state.timer = setTimeout(() => { run(() => flushSave()); }, 900);
+  state.timer = setTimeout(() => { run(() => flushSave(), 'save'); }, 900);
 }
 async function flushSave(required = false) {
   clearTimeout(state.timer);
@@ -86,7 +88,8 @@ async function flushSave(required = false) {
   let next;
   try { next = payload(); } catch (error) { if (required) { updateCustomerValidity(true); throw error; } return; }
   if (!next) { if (required) throw new Error('Completa al menos un producto válido y el peso.'); return; }
-  const hash = JSON.stringify(next); if (hash === state.saved) return;
+  const hash = JSON.stringify(next);
+  if (hash === state.saved) { if (messageScope === 'save') message(''); return; }
   const id = state.id; const epoch = state.epoch; const revision = state.revision;
   status('save-status', 'Guardando cotización…'); $('save-quote').disabled = true;
   state.saving = (async () => {
@@ -96,6 +99,7 @@ async function flushSave(required = false) {
       state.revision = saved.revision; state.saved = hash;
       $('editing-number').textContent = saved.number;
       status('save-status', `${saved.number} guardada · revisión ${saved.revision}.`);
+      if (messageScope === 'save') message('');
     } catch (error) {
       if (epoch === state.epoch) status('save-status', error.code === '40001' ? 'Otra sesión modificó esta cotización. Abre su versión actual desde el historial antes de editar.' : 'No se pudo guardar. Tus datos siguen en el formulario; pulsa Guardar ahora para reintentar.', true);
       throw error;
@@ -275,7 +279,7 @@ document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click'
 $('all-quotes-button').addEventListener('click', () => { state.allQuotes = true; state.quotesPage = 1; $('history-heading').textContent = 'Auditoría de todas las cotizaciones'; $('filter-user-field').hidden = false; showView('history'); });
 document.addEventListener('quote:changed', queueSave);
 $('customer-name').addEventListener('input', () => { window.Cotizador.refresh(); updateCustomerValidity(); queueSave(); });
-$('save-quote').addEventListener('click', () => run(() => flushSave(true)));
+$('save-quote').addEventListener('click', () => run(() => flushSave(true), 'save'));
 $('clear-quote').addEventListener('click', event => { event.stopImmediatePropagation(); run(newQuote); }, true);
 $('quote-filters').addEventListener('submit', event => { event.preventDefault(); state.quotesPage = 1; run(loadQuotes); });
 $('quotes-prev').addEventListener('click', () => { state.quotesPage--; run(loadQuotes); });

@@ -83,12 +83,28 @@ test('Historial persiste al recargar y sus importes conservan el cambio original
   await expect(page.locator('#quote-detail-content')).toContainText('₡600');
   await expect(page.locator('#quote-detail-content')).toContainText('23:30:00'); expect(f.errors).toEqual([]);
 });
+test('Un aviso de formulario incompleto desaparece al guardar y al restaurar una cotización válida', async ({ page }) => {
+  const f = await fixture(page); await login(page);
+  await page.locator('#save-quote').click();
+  await expect(page.locator('#app-message')).toContainText('Completa al menos un producto válido y el peso.');
+  await quote(page);
+  await expect(page.locator('#app-message')).toBeHidden();
+  await page.locator('#weight').fill('');
+  await page.locator('#save-quote').click();
+  await expect(page.locator('#app-message')).toBeVisible();
+  await page.locator('#weight').fill('5');
+  await expect(page.locator('#app-message')).toBeHidden();
+  expect(f.records).toHaveLength(1);
+  expect(f.calls.filter(call => call.path === '/rest/v1/rpc/save_quote')).toHaveLength(1);
+});
 test('Fallo de guardado muestra error, conserva formulario y permite reintentar', async ({ page }) => {
   const f = await fixture(page); f.failNextSave(); await login(page);
   await page.locator('#customer-name').fill('Cliente pendiente'); await page.locator('.price-input').fill('10'); await page.locator('#weight').fill('5');
   await expect(page.locator('#save-status')).toContainText('No se pudo guardar', { timeout: 5000 });
+  await expect(page.locator('#app-message')).toBeVisible();
   await expect(page.locator('#customer-name')).toHaveValue('Cliente pendiente');
   await page.locator('#save-quote').click(); await expect(page.locator('#save-status')).toContainText('guardada'); expect(f.records).toHaveLength(1);
+  await expect(page.locator('#app-message')).toBeHidden();
 });
 test('Administrador abre auditoría, usuarios y opera acciones de cuentas', async ({ page }) => {
   const f = await fixture(page, 'admin'); await login(page, 'admin'); await quote(page);
