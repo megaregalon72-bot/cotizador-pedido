@@ -44,6 +44,9 @@ async function fixture(page, role = 'seller') {
     if (url.pathname === '/rest/v1/rpc/get_quote') return reply({ ...records.find(q => q.id === body.p_id), revisions: [] });
     if (url.pathname === '/rest/v1/rpc/set_quote_status') { const q = records.find(q => q.id === body.p_id); q.status = body.p_status; q.revision++; return reply(q); }
     if (url.pathname === '/rest/v1/rpc/quote_statistics') return reply({ quotes: records.length, active_users: 1, total_usd_cents: '3500', total_crc_cents: '2100000' });
+    if (url.pathname === '/rest/v1/rpc/seller_period_report') return reply([{ seller_id: profile.id, username: profile.username, seller_name: profile.display_name,
+      period_start: body.p_period === 'week' ? '2026-10-05' : '2026-10-01', period_end: body.p_period === 'week' ? '2026-10-11' : '2026-10-31',
+      quote_count: records.length, total_usd_cents: '3500', total_crc_cents: '1950000', quoted_units: 2, confirmed_count: 1, sold_units: 2 }]);
     if (url.pathname === '/rest/v1/audit_events') return reply([{ id: 1, actor_username: profile.username, action: 'quote_created', resource_id: records[0]?.id,
       created_at: '2026-10-09T04:30:00Z', details: { new: records[0]?.snapshot } }], 200, { 'content-range': '0-0/1' });
     if (url.pathname === '/functions/v1/admin-users') {
@@ -161,6 +164,12 @@ test('Administrador abre auditoría, usuarios y opera acciones de cuentas', asyn
   const f = await fixture(page, 'admin'); await login(page, 'admin'); await quote(page);
   await page.locator('[data-view="audit"]').click(); await expect(page.locator('#audit-body')).toContainText('Cotización creada');
   await expect(page.locator('#stats-grid')).toContainText('Usuarios activos');
+  await expect(page.locator('#seller-report-body')).toContainText('Administrador (admin)');
+  await expect(page.locator('#seller-report-body')).toContainText('₡19,500');
+  await page.locator('#report-period').selectOption('week');
+  await page.getByRole('button', { name: 'Consultar reporte', exact: true }).click();
+  await expect(page.locator('#seller-report-body')).toContainText('10/05/2026');
+  expect(f.calls.filter(c => c.path === '/rest/v1/rpc/seller_period_report').at(-1).body.p_period).toBe('week');
   await expect(page.locator('#audit-status')).toContainText('1 eventos');
   await page.screenshot({ path: test.info().outputPath('auditoria-escritorio.png'), fullPage: true });
   await page.locator('[data-view="users"]').click(); await expect(page.locator('#users-body')).toContainText('Administrador');

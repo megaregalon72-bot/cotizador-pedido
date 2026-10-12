@@ -146,6 +146,18 @@
   <section class="management-view" id="audit-view" aria-labelledby="audit-heading" hidden>
     <div class="panel"><div class="panel-heading"><h2 id="audit-heading">Panel administrativo de auditoría</h2><button type="button" class="small-button" id="all-quotes-button">Ver todas las cotizaciones</button></div>
       <div class="stats-grid" id="stats-grid"></div>
+      <section aria-labelledby="seller-report-heading">
+        <h3 id="seller-report-heading">Cotizaciones y ventas por vendedor</h3>
+        <p class="field-hint">Semanas de lunes a domingo, hora de Panamá. Los montos excluyen canceladas. Las unidades vendidas cuentan cotizaciones confirmadas en la fecha de confirmación.</p>
+        <form id="seller-report-filters" class="filters-grid">
+          <div class="field"><label for="report-period">Agrupar por</label><select id="report-period"><option value="month">Mes</option><option value="week">Semana</option></select></div>
+          <div class="field"><label for="report-from">Desde</label><input id="report-from" type="date" required></div>
+          <div class="field"><label for="report-to">Hasta</label><input id="report-to" type="date" required></div>
+          <button type="submit" class="small-button">Consultar reporte</button>
+        </form>
+        <p id="seller-report-status" class="form-status" role="status"></p>
+        <div class="data-table-wrapper"><table class="data-table"><thead><tr><th>Período</th><th>Vendedor</th><th>Cotizaciones</th><th>Monto USD</th><th>Monto CRC</th><th>Unidades cotizadas</th><th>Confirmadas</th><th>Unidades vendidas</th></tr></thead><tbody id="seller-report-body"></tbody></table></div>
+      </section>
       <form id="audit-filters" class="filters-grid"><div class="field"><label for="audit-user">Usuario</label><input id="audit-user" type="search" maxlength="32"></div><div class="field"><label for="audit-action">Acción</label><select id="audit-action"><option value="">Todas</option><option value="quote_created">Cotización creada</option><option value="quote_updated">Cotización modificada</option><option value="quote_status_changed">Cambio de estado</option><option value="quote_cancelled">Cancelación</option><option value="user_created">Usuario creado</option><option value="user_updated">Usuario modificado</option><option value="user_deactivated">Usuario desactivado</option><option value="user_reactivated">Usuario reactivado</option><option value="password_reset">Contraseña restablecida</option><option value="login">Inicio de sesión</option><option value="logout">Cierre de sesión</option></select></div><button type="submit" class="small-button">Filtrar eventos</button></form>
       <p class="form-status" id="audit-status" role="status"></p><div class="data-table-wrapper"><table class="data-table"><thead><tr><th>Usuario</th><th>Acción</th><th>Fecha</th><th>Hora</th><th>Registro</th><th>Detalle</th></tr></thead><tbody id="audit-body"></tbody></table></div>
       <div class="pagination"><button type="button" class="small-button" id="audit-prev">Anterior</button><span id="audit-page"></span><button type="button" class="small-button" id="audit-next">Siguiente</button></div>

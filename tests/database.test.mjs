@@ -19,6 +19,7 @@ before(async () => {
   for (const key of ['seller', 'other']) await asService("select public.admin_set_profile($1,$2,'seller',true,$3)", [ids.admin, ids[key], key]);
   await save(ids.seller, legacyQuoteId, 0, payload('60000'));
   await db.exec(await readFile(new URL('../supabase/migrations/202610110002_envio_fijo.sql', import.meta.url), 'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/202610110003_reportes.sql', import.meta.url), 'utf8'));
 });
 after(async () => { await db.close(); });
 function asRole(role, id, sql, params = []) {
@@ -161,4 +162,34 @@ test('Desactivar una cuenta bloquea de inmediato un JWT aún existente', async (
   await asService("select public.admin_set_profile($1,$2,'seller',true,'seller')", [ids.admin, ids.seller]);
   assert.ok((await asUser(ids.seller, 'select count(*)::int as n from public.quotes')).rows[0].n > 0);
   await assert.rejects(() => asService("select public.admin_set_profile($1,$1,'seller',false,'admin')", [ids.admin]), /administrador activo/);
+});
+test('Reportes semanales y mensuales separan vendedores, revisiones, cancelaciones y ventas por fecha de confirmación en Panamá', async () => {
+  const first = randomUUID(), second = randomUUID(), cancelled = randomUUID();
+  await save(ids.seller, first, 0, payload('60000'));
+  await save(ids.admin, first, 1, payload('60000', 'Reporte', [{ description: 'Producto', unit_price_cents: '1000', quantity: 3 }]));
+  await save(ids.seller, second, 0, payload('60000'));
+  await save(ids.other, cancelled, 0, payload('60000'));
+  await asUser(ids.admin, "select public.set_quote_status($1,'confirmed',2)", [first]);
+  await asUser(ids.other, "select public.set_quote_status($1,'cancelled',1)", [cancelled]);
+  // Fechas aisladas de los otros casos: domingo 23:59 y lunes 00:00 en Panamá.
+  await db.query("update public.quotes set created_at='2024-10-07T04:59:00Z' where id=$1", [first]);
+  await db.query("update public.quotes set created_at='2024-10-07T05:00:00Z' where id in ($1,$2)", [second, cancelled]);
+  await db.query("update public.quote_revisions set created_at='2024-10-14T05:00:00Z' where quote_id=$1 and new_status='confirmed'", [first]);
+  const args = ['2024-09-30T05:00:00Z', '2024-10-21T05:00:00Z'];
+  const report = async period => (await asUser(ids.admin, 'select public.seller_period_report($1,$2,$3) as rows', [period, ...args])).rows[0].rows;
+  const weekly = await report('week');
+  const sunday = weekly.find(r => r.username === 'seller' && r.period_start === '2024-09-30');
+  assert.equal(sunday.quote_count, 1); assert.equal(sunday.quoted_units, 3);
+  assert.equal(sunday.total_crc_cents, '2550000'); assert.equal(sunday.sold_units, 0);
+  assert.equal(weekly.find(r => r.username === 'seller' && r.period_start === '2024-10-07').quote_count, 1);
+  const sales = weekly.find(r => r.username === 'seller' && r.period_start === '2024-10-14');
+  assert.equal(sales.quote_count, 0); assert.equal(sales.confirmed_count, 1); assert.equal(sales.sold_units, 3);
+  const other = weekly.find(r => r.username === 'other');
+  assert.equal(other.quote_count, 1); assert.equal(other.total_crc_cents, '0'); assert.equal(other.quoted_units, 0);
+  const monthly = (await report('month')).find(r => r.username === 'seller');
+  assert.equal(monthly.period_start, '2024-10-01'); assert.equal(monthly.quote_count, 2);
+  assert.equal(monthly.total_crc_cents, '4500000'); assert.equal(monthly.quoted_units, 5); assert.equal(monthly.sold_units, 3);
+  await assert.rejects(() => asUser(ids.seller, 'select public.seller_period_report($1,$2,$3)', ['month', ...args]), e => e.code === '42501');
+  await assert.rejects(() => report('day'), /Selecciona/);
+  await assert.rejects(() => asUser(ids.admin, "select public.seller_period_report('month','2020-01-01','2024-01-01')"), /hasta un año/);
 });

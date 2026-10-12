@@ -46,6 +46,8 @@ Usa SQL Editor o CLI para esta migración; no ejecutes la misma migración dos v
 
 Para las tarifas fijas en colones, aplica después `supabase/migrations/202610110002_envio_fijo.sql`. Si la base ya existe, ejecuta únicamente esta actualización. Reemplaza la función de cálculo de futuros guardados sin modificar las cotizaciones históricas ni sus revisiones. Una cotización antigua conserva su total en el historial; editarla y guardarla crea una revisión con las tarifas actuales.
 
+Aplica también `supabase/migrations/202610110003_reportes.sql` para habilitar los reportes semanales y mensuales por vendedor en Auditoría. Solo administradores activos pueden consultarlos. El reporte usa los registros existentes, fechas de Panamá y semanas de lunes a domingo; no crea cuentas ni modifica cotizaciones.
+
 ## 4. Usuarios sin correos electrónicos
 
 En **Authentication → Providers**, mantén habilitado el proveedor **Email/password**, pero desactiva **Allow new users to sign up**. No hay registro abierto en esta aplicación.

@@ -5,7 +5,7 @@ import { money, dateAndTime, dateRange, quotesCsv, validateCustomer, TIME_ZONE }
 const $ = id => document.getElementById(id);
 const state = { profile: null, view: 'quote', id: crypto.randomUUID(), revision: 0, saved: '', saving: null,
   timer: null, hydrating: false, epoch: 0, quotesPage: 1, quotesTotal: 0, allQuotes: false,
-  auditPage: 1, auditTotal: 0, users: [], detail: null };
+  auditPage: 1, auditTotal: 0, users: [], detail: null, reportRequest: 0 };
 const labels = { draft: 'Borrador', sent: 'Enviada', confirmed: 'Confirmada', cancelled: 'Cancelada', admin: 'Administrador', seller: 'Vendedor' };
 const actionLabels = { login: 'Inicio de sesión', logout: 'Cierre de sesión', quote_created: 'Cotización creada', quote_updated: 'Cotización modificada',
   quote_cancelled: 'Cotización cancelada', quote_status_changed: 'Cambio de estado', user_created: 'Usuario creado', user_updated: 'Usuario modificado',
@@ -22,7 +22,8 @@ function clearPrivateData() {
   state.epoch++; state.profile = null; state.id = crypto.randomUUID(); state.revision = 0; state.saved = ''; state.users = []; state.detail = null;
   clearTimeout(state.timer); state.hydrating = true; $('customer-name').value = ''; window.Cotizador.clearQuote(); state.hydrating = false;
   $('toast').hidden = true;
-  for (const id of ['quotes-body', 'users-body', 'audit-body', 'stats-grid', 'quote-detail-content', 'quote-detail-actions']) $(id).replaceChildren();
+  for (const id of ['quotes-body', 'users-body', 'audit-body', 'stats-grid', 'seller-report-body', 'quote-detail-content', 'quote-detail-actions']) $(id).replaceChildren();
+  status('seller-report-status', '');
   $('event-detail-content').textContent = ''; $('login-password').value = ''; $('user-password').value = ''; $('reset-password').value = '';
   $('quote-filters').reset(); $('audit-filters').reset(); resetUserForm();
   document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
@@ -46,7 +47,7 @@ async function activateSession(session) {
   $('session-name').textContent = `${profile.display_name} · ${labels[profile.role]}`;
   document.querySelectorAll('[data-admin]').forEach(el => { el.hidden = profile.role !== 'admin'; });
   if (first) { state.id = crypto.randomUUID(); state.revision = 0; state.saved = ''; showView('quote'); }
-  if (roleChanged) { state.allQuotes = false; $('quotes-body').replaceChildren(); $('audit-body').replaceChildren(); $('users-body').replaceChildren(); $('stats-grid').replaceChildren(); state.users = []; showView('quote'); }
+  if (roleChanged) { state.allQuotes = false; $('quotes-body').replaceChildren(); $('audit-body').replaceChildren(); $('users-body').replaceChildren(); $('stats-grid').replaceChildren(); $('seller-report-body').replaceChildren(); status('seller-report-status', ''); state.users = []; showView('quote'); }
   if (profile.role !== 'admin' && ['users', 'audit'].includes(state.view)) showView('quote');
 }
 function showView(view) {
@@ -57,7 +58,7 @@ function showView(view) {
   $('exchange-control').hidden = view !== 'quote'; $('mobile-total').hidden = view !== 'quote';
   document.querySelectorAll('[data-view]').forEach(b => { b.classList.toggle('active', b.dataset.view === view); });
   if (view === 'history') run(loadQuotes);
-  if (view === 'audit') run(loadAudit);
+  if (view === 'audit') { run(loadAudit); run(loadSellerReport); }
   if (view === 'users') run(loadUsers);
 }
 function payload() {
@@ -195,6 +196,29 @@ async function editQuote(q, copy) {
   status('save-status', copy ? 'La copia se guardará como una cotización nueva.' : legacyPricing ? `${q.number} cargada con las tarifas actuales; pulsa Guardar ahora para registrar una nueva revisión.` : `${q.number} cargada; los cambios crearán una nueva revisión.`);
   state.hydrating = false; $('quote-detail-dialog').close(); showView('quote'); updateCustomerValidity(); if (copy) queueSave();
 }
+async function loadSellerReport() {
+  if (state.profile?.role !== 'admin') return;
+  const epoch = state.epoch; const request = ++state.reportRequest;
+  status('seller-report-status', 'Cargando reporte…');
+  $('seller-report-body').replaceChildren();
+  try {
+    const dates = dateRange($('report-from').value, $('report-to').value);
+    const rows = await api.result(api.supabase.rpc('seller_period_report', { p_period: $('report-period').value, ...dates }));
+    if (epoch !== state.epoch || request !== state.reportRequest || state.profile?.role !== 'admin') return;
+    for (const entry of rows) {
+      const row = document.createElement('tr');
+      const start = dateAndTime(entry.period_start + 'T12:00:00-05:00').date;
+      const end = dateAndTime(entry.period_end + 'T12:00:00-05:00').date;
+      [start + ' – ' + end, `${entry.seller_name} (${entry.username})`, entry.quote_count,
+        money(entry.total_usd_cents), money(entry.total_crc_cents, '₡', false), entry.quoted_units,
+        entry.confirmed_count, entry.sold_units].forEach(value => cell(row, value));
+      $('seller-report-body').append(row);
+    }
+    status('seller-report-status', rows.length ? `${rows.length} resultados. Cada cotización se cuenta una vez; las revisiones no duplican cantidades.` : 'No hay cotizaciones ni ventas en este rango.');
+  } catch (error) {
+    if (epoch === state.epoch && request === state.reportRequest && state.profile?.role === 'admin') status('seller-report-status', error.message, true);
+  }
+}
 async function loadAudit() {
   if (state.profile?.role !== 'admin') return;
   status('audit-status', 'Cargando auditoría…');
@@ -257,6 +281,9 @@ async function checkProfile() {
   await activateSession(data.session);
 }
 
+const reportToday = new Intl.DateTimeFormat('en-CA', { timeZone: TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+$('report-from').value = reportToday.slice(0, 4) + '-01-01'; $('report-to').value = reportToday;
+$('seller-report-filters').addEventListener('submit', event => { event.preventDefault(); run(loadSellerReport); });
 document.querySelectorAll('[data-current-year]').forEach(el => { el.textContent = new Intl.DateTimeFormat('en', { timeZone: TIME_ZONE, year: 'numeric' }).format(new Date()); });
 document.querySelectorAll('[data-close-dialog]').forEach(b => b.addEventListener('click', () => { b.closest('dialog').close(); $('reset-password').value = ''; }));
 $('login-form').addEventListener('submit', async event => {
