@@ -68,6 +68,7 @@ test('Login por usuario, cálculo existente y guardado automático del cliente',
   const f = await fixture(page); await login(page); await quote(page);
   expect(f.records).toHaveLength(1); expect(f.records[0].customer_name).toBe('María González');
   expect(f.records[0].snapshot.exchange_rate_cents).toBe('60000');
+  await expect(page.locator('#tariff-body tr td:last-child')).toHaveText(['₡7,500', '₡15,000', '₡20,000']);
   await page.locator('#save-quote').click(); expect(f.records).toHaveLength(1);
   await expect(page.locator('#toast')).toHaveText('Información guardada correctamente.');
   await expect(page.locator('#toast')).toBeVisible();

@@ -42,6 +42,8 @@ Los permisos se comprueban en PostgreSQL y la función de servidor, no solo en l
 
 ## Matemáticas conservadas
 
+La tabla visible de tarifas mantiene valores de referencia fijos en colones: ₡7,500, ₡15,000 y ₡20,000. El tipo de cambio editable se utiliza en la conversión de los importes de la cotización, como muestra la comparación siguiente.
+
 | Peso | Envío USD | CRC con cambio 500 | CRC con cambio 600 |
 |---|---:|---:|---:|
 | 0–10 kg, inclusive | $15.00 | ₡7,500 | ₡9,000 |

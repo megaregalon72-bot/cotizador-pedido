@@ -5,9 +5,9 @@ const DEFAULT_USD_TO_CRC = 500; // Valor inicial editable; no depende de servici
 const EXCHANGE_RATE_STORAGE_KEY = "cotizador.exchangeRate";
 let exchangeRateCents = BigInt(DEFAULT_USD_TO_CRC) * 100n;
 const SHIPPING_RATES = Object.freeze([
-  { maxKg: 10, priceCents: 1500n, label: "0–10 kg" },
-  { maxKg: 20, priceCents: 3000n, label: "Más de 10–20 kg" },
-  { maxKg: null, priceCents: 4000n, label: "Más de 20 kg" }
+  { maxKg: 10, priceCents: 1500n, referenceCrcCents: 750000n, label: "0–10 kg" },
+  { maxKg: 20, priceCents: 3000n, referenceCrcCents: 1500000n, label: "Más de 10–20 kg" },
+  { maxKg: null, priceCents: 4000n, referenceCrcCents: 2000000n, label: "Más de 20 kg" }
 ]);
 const IVA_CONFIG = Object.freeze({
   rateBasisPoints: null // null = sin tasa definida. Al definirla: porcentaje × 100.
@@ -151,7 +151,7 @@ function renderTariffs() {
   SHIPPING_RATES.forEach((rate, index) => {
     const row = document.createElement("tr");
     row.dataset.rateIndex = String(index);
-    [rate.label, usd(rate.priceCents), crc(rate.priceCents)].forEach(value => {
+    [rate.label, usd(rate.priceCents), formatAmount(rate.referenceCrcCents, "₡", false)].forEach(value => {
       const cell = document.createElement("td"); cell.textContent = value; row.append(cell);
     });
     body.append(row);
