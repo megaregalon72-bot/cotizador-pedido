@@ -333,4 +333,4 @@ function loadSnapshot(snapshot) {
   }
   updateQuote();
 }
-window.Cotizador = Object.freeze({ getSnapshot: currentSnapshot, loadSnapshot, clearQuote, refresh: updateQuote });
+window.Cotizador = Object.freeze({ getSnapshot: currentSnapshot, loadSnapshot, clearQuote, refresh: updateQuote, showToast });

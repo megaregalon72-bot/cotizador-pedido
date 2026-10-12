@@ -69,6 +69,8 @@ test('Login por usuario, cálculo existente y guardado automático del cliente',
   expect(f.records).toHaveLength(1); expect(f.records[0].customer_name).toBe('María González');
   expect(f.records[0].snapshot.exchange_rate_cents).toBe('60000');
   await page.locator('#save-quote').click(); expect(f.records).toHaveLength(1);
+  await expect(page.locator('#toast')).toHaveText('Información guardada correctamente.');
+  await expect(page.locator('#toast')).toBeVisible();
   await expect(page.locator('[data-view="users"]')).toBeHidden();
   await expect(page.locator('.app-watermark')).toContainText('Erick Gonzalez'); expect(f.errors).toEqual([]);
   await page.screenshot({ path: test.info().outputPath('cotizador-escritorio.png'), fullPage: true });
@@ -87,6 +89,7 @@ test('Un aviso de formulario incompleto desaparece al guardar y al restaurar una
   const f = await fixture(page); await login(page);
   await page.locator('#save-quote').click();
   await expect(page.locator('#app-message')).toContainText('Completa al menos un producto válido y el peso.');
+  await expect(page.locator('#toast')).toBeHidden();
   await quote(page);
   await expect(page.locator('#app-message')).toBeHidden();
   await page.locator('#weight').fill('');
@@ -105,6 +108,8 @@ test('Fallo de guardado muestra error, conserva formulario y permite reintentar'
   await expect(page.locator('#customer-name')).toHaveValue('Cliente pendiente');
   await page.locator('#save-quote').click(); await expect(page.locator('#save-status')).toContainText('guardada'); expect(f.records).toHaveLength(1);
   await expect(page.locator('#app-message')).toBeHidden();
+  await expect(page.locator('#toast')).toHaveText('Información guardada correctamente.');
+  await expect(page.locator('#toast')).toBeVisible();
 });
 test('Administrador abre auditoría, usuarios y opera acciones de cuentas', async ({ page }) => {
   const f = await fixture(page, 'admin'); await login(page, 'admin'); await quote(page);

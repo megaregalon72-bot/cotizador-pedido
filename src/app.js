@@ -279,7 +279,14 @@ document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click'
 $('all-quotes-button').addEventListener('click', () => { state.allQuotes = true; state.quotesPage = 1; $('history-heading').textContent = 'Auditoría de todas las cotizaciones'; $('filter-user-field').hidden = false; showView('history'); });
 document.addEventListener('quote:changed', queueSave);
 $('customer-name').addEventListener('input', () => { window.Cotizador.refresh(); updateCustomerValidity(); queueSave(); });
-$('save-quote').addEventListener('click', () => run(() => flushSave(true), 'save'));
+$('save-quote').addEventListener('click', () => run(async () => {
+  $('toast').hidden = true;
+  const epoch = state.epoch;
+  await flushSave(true);
+  if (epoch === state.epoch && state.profile && JSON.stringify(payload()) === state.saved) {
+    window.Cotizador.showToast('Información guardada correctamente.');
+  }
+}, 'save'));
 $('clear-quote').addEventListener('click', event => { event.stopImmediatePropagation(); run(newQuote); }, true);
 $('quote-filters').addEventListener('submit', event => { event.preventDefault(); state.quotesPage = 1; run(loadQuotes); });
 $('quotes-prev').addEventListener('click', () => { state.quotesPage--; run(loadQuotes); });
