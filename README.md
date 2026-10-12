@@ -42,15 +42,15 @@ Los permisos se comprueban en PostgreSQL y la función de servidor, no solo en l
 
 ## Matemáticas conservadas
 
-La tabla visible de tarifas mantiene valores de referencia fijos en colones: ₡7,500, ₡15,000 y ₡20,000. El tipo de cambio editable se utiliza en la conversión de los importes de la cotización, como muestra la comparación siguiente.
+Las tarifas de envío son fijas en dólares y colones. El tipo de cambio editable se aplica únicamente al subtotal de productos. El total en colones suma productos convertidos + envío fijo del rango de peso; el total en dólares suma productos + envío USD.
 
-| Peso | Envío USD | CRC con cambio 500 | CRC con cambio 600 |
-|---|---:|---:|---:|
-| 0–10 kg, inclusive | $15.00 | ₡7,500 | ₡9,000 |
-| Más de 10–20 kg, inclusive | $30.00 | ₡15,000 | ₡18,000 |
-| Más de 20 kg | $40.00 | ₡20,000 | ₡24,000 |
+| Peso | Envío USD | Envío CRC fijo |
+|---|---:|---:|
+| 0–10 kg, inclusive | $15.00 | ₡7,500 |
+| Más de 10–20 kg, inclusive | $30.00 | ₡15,000 |
+| Más de 20 kg | $40.00 | ₡20,000 |
 
-Por ejemplo, $10 × 2 y 5 kg dan $35.00; con cambio 500 son ₡17,500 y con 600 son ₡21,000. El cambio admite hasta 2 decimales, se recuerda en el navegador y permanece fijado en cada cotización almacenada. Los importes se calculan y serializan como centavos enteros, sin perder precisión en JSON.
+Por ejemplo, $10 × 2 y 5 kg dan $35.00; con cambio 500 son ₡17,500 y con 600 son ₡19,500 (₡12,000 de productos + ₡7,500 de envío). El cambio admite hasta 2 decimales, se recuerda en el navegador y permanece fijado en cada cotización almacenada. Los importes se calculan y serializan como centavos enteros, sin perder precisión en JSON. Las cotizaciones históricas conservan sus importes originales; editar y volver a guardar una antigua crea una revisión con las tarifas actuales.
 
 El IVA sigue sin tasa comercial definida. Las exenciones se registran y no añaden recargos. No se cambian los precios finales existentes.
 

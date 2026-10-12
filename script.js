@@ -5,9 +5,9 @@ const DEFAULT_USD_TO_CRC = 500; // Valor inicial editable; no depende de servici
 const EXCHANGE_RATE_STORAGE_KEY = "cotizador.exchangeRate";
 let exchangeRateCents = BigInt(DEFAULT_USD_TO_CRC) * 100n;
 const SHIPPING_RATES = Object.freeze([
-  { maxKg: 10, priceCents: 1500n, referenceCrcCents: 750000n, label: "0–10 kg" },
-  { maxKg: 20, priceCents: 3000n, referenceCrcCents: 1500000n, label: "Más de 10–20 kg" },
-  { maxKg: null, priceCents: 4000n, referenceCrcCents: 2000000n, label: "Más de 20 kg" }
+  { maxKg: 10, priceCents: 1500n, priceCrcCents: 750000n, label: "0–10 kg" },
+  { maxKg: 20, priceCents: 3000n, priceCrcCents: 1500000n, label: "Más de 10–20 kg" },
+  { maxKg: null, priceCents: 4000n, priceCrcCents: 2000000n, label: "Más de 20 kg" }
 ]);
 const IVA_CONFIG = Object.freeze({
   rateBasisPoints: null // null = sin tasa definida. Al definirla: porcentaje × 100.
@@ -27,6 +27,9 @@ function formatAmount(cents, symbol, alwaysDecimals) {
 function usd(cents) { return formatAmount(cents, "$", true); }
 function crc(cents, rateCents = exchangeRateCents) {
   return rateCents === null ? "—" : formatAmount(roundDivide(cents * rateCents, 100n), "₡", false);
+}
+function quoteTotalCrc(subtotalCents, shippingCrcCents, rateCents = exchangeRateCents) {
+  return rateCents === null ? null : roundDivide(subtotalCents * rateCents, 100n) + shippingCrcCents;
 }
 
 // Punto o coma como separador decimal. No se aceptan separadores de miles,
@@ -100,9 +103,9 @@ function changeExchangeRate() {
 }
 
 function setText(id, value) { document.getElementById(id).textContent = value; }
-function setMoneyPair(prefix, cents, unavailable = false) {
+function setMoneyPair(prefix, cents, unavailable = false, crcCents = undefined) {
   setText(prefix + "-usd", unavailable ? "—" : usd(cents));
-  setText(prefix + "-crc", unavailable ? "—" : crc(cents));
+  setText(prefix + "-crc", unavailable || crcCents === null ? "—" : crcCents === undefined ? crc(cents) : formatAmount(crcCents, "₡", false));
 }
 function showFieldError(input, message) {
   const error = document.getElementById(input.dataset.error || "weight-error");
@@ -151,7 +154,7 @@ function renderTariffs() {
   SHIPPING_RATES.forEach((rate, index) => {
     const row = document.createElement("tr");
     row.dataset.rateIndex = String(index);
-    [rate.label, usd(rate.priceCents), formatAmount(rate.referenceCrcCents, "₡", false)].forEach(value => {
+    [rate.label, usd(rate.priceCents), formatAmount(rate.priceCrcCents, "₡", false)].forEach(value => {
       const cell = document.createElement("td"); cell.textContent = value; row.append(cell);
     });
     body.append(row);
@@ -171,7 +174,7 @@ function renderTax(grossCents, hasWeight) {
   [["Sin IVA", tax.netCents], ["IVA", tax.ivaCents], ["Con IVA", tax.grossCents]].forEach(([label, cents]) => {
     const item = document.createElement("div");
     const term = document.createElement("dt"); term.textContent = label;
-    const detail = document.createElement("dd"); detail.textContent = usd(cents) + " / " + crc(cents);
+    const detail = document.createElement("dd"); detail.textContent = usd(cents) + " / " + crc(cents, 50000n);
     item.append(term, detail); list.append(item);
   });
   container.append(title, list);
@@ -207,20 +210,22 @@ function updateQuote() {
   const hasWeight = weight.value !== null;
   const rateIndex = hasWeight ? shippingIndex(weight.value) : -1;
   const shipping = rateIndex < 0 ? 0n : SHIPPING_RATES[rateIndex].priceCents;
+  const shippingCrc = rateIndex < 0 ? 0n : SHIPPING_RATES[rateIndex].priceCrcCents;
   const hasAmountError = hasInvalidProduct || Boolean(weight.error);
   const hasError = hasAmountError || Boolean(exchangeRate.error);
   const total = subtotal + shipping;
+  const totalCrc = quoteTotalCrc(subtotal, shippingCrc);
   const ready = productCount > 0 && hasWeight && !hasError;
-  lastQuote = { subtotal, shipping, total, units, productCount, ready, exchangeRateCents,
+  lastQuote = { subtotal, shipping, shippingCrc, total, totalCrc, units, productCount, ready, exchangeRateCents,
     customerName: document.getElementById("customer-name")?.value.trim() || "" };
 
   setMoneyPair("products", subtotal, hasInvalidProduct);
   setMoneyPair("summary-products", subtotal, hasInvalidProduct);
-  setMoneyPair("shipping", shipping, Boolean(weight.error));
-  setMoneyPair("summary-shipping", shipping, Boolean(weight.error));
-  setMoneyPair("total", total, hasAmountError);
+  setMoneyPair("shipping", shipping, Boolean(weight.error), shippingCrc);
+  setMoneyPair("summary-shipping", shipping, Boolean(weight.error), shippingCrc);
+  setMoneyPair("total", total, hasAmountError, totalCrc);
   setText("mobile-usd", hasAmountError ? "—" : usd(total) + " USD");
-  setText("mobile-crc", hasAmountError ? "—" : crc(total));
+  setText("mobile-crc", hasAmountError || totalCrc === null ? "—" : formatAmount(totalCrc, "₡", false));
   setText("mobile-label", hasError ? "Revisa los datos" : ready ? "Total a pagar" : "Total parcial");
   const unitLabel = integerFormatter.format(units) + (units === 1n ? " unidad" : " unidades");
   setText("unit-count", unitLabel);
@@ -246,8 +251,8 @@ function summaryText(quote) {
   return [
     "COTIZACIÓN ESTIMADA", ...(quote.customerName ? ["Cliente: " + quote.customerName] : []), "",
     "Productos (" + integerFormatter.format(quote.units) + " unidades): " + usd(quote.subtotal) + " / " + crc(quote.subtotal, quote.exchangeRateCents),
-    "Envío: " + usd(quote.shipping) + " / " + crc(quote.shipping, quote.exchangeRateCents), "",
-    "TOTAL:", usd(quote.total) + " USD", crc(quote.total, quote.exchangeRateCents) + " CRC", "",
+    "Envío: " + usd(quote.shipping) + " / " + formatAmount(quote.shippingCrc, "₡", false), "",
+    "TOTAL:", usd(quote.total) + " USD", formatAmount(quote.totalCrc, "₡", false) + " CRC", "",
     "Tipo de cambio: $1 USD = " + formatAmount(quote.exchangeRateCents, "₡", false) + " CRC.",
     "Monto estimado. Confirmar el total final al pasar por caja."
   ].join("\n");
@@ -317,7 +322,7 @@ function currentSnapshot() {
       unit_price_cents: price.value.toString(), quantity: Number(quantity.value),
       tax_exempt: row.querySelector(".tax-exempt-input").checked }];
   });
-  return { items, exchange_rate_cents: exchangeRateCents.toString(), weight_micros: parseWeight(elements.weight.value).value.toString() };
+  return { items, exchange_rate_cents: exchangeRateCents.toString(), weight_micros: parseWeight(elements.weight.value).value.toString(), shipping_pricing_version: 2 };
 }
 function loadSnapshot(snapshot) {
   elements.list.replaceChildren();

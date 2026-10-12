@@ -44,6 +44,8 @@ npx supabase db push
 
 Usa SQL Editor o CLI para esta migración; no ejecutes la misma migración dos veces por ambas vías.
 
+Para las tarifas fijas en colones, aplica después `supabase/migrations/202610110002_envio_fijo.sql`. Si la base ya existe, ejecuta únicamente esta actualización. Reemplaza la función de cálculo de futuros guardados sin modificar las cotizaciones históricas ni sus revisiones. Una cotización antigua conserva su total en el historial; editarla y guardarla crea una revisión con las tarifas actuales.
+
 ## 4. Usuarios sin correos electrónicos
 
 En **Authentication → Providers**, mantén habilitado el proveedor **Email/password**, pero desactiva **Allow new users to sign up**. No hay registro abierto en esta aplicación.
@@ -156,18 +158,18 @@ Con un vendedor:
 
 1. Ingresa `María González` como cliente.
 2. Precio `10`, cantidad `2`, peso `5`, cambio `500`: $35.00 / ₡17,500.
-3. Cambia a `600`: $35.00 / ₡21,000.
+3. Cambia a `600`: $35.00 / ₡19,500 (₡12,000 de productos + ₡7,500 de envío fijo).
 4. Espera el mensaje **COT-… guardada**. También puedes pulsar **Guardar ahora**.
 5. En Supabase → Table Editor, comprueba `quotes`, `clients`, `quote_items`, `quote_revisions` y `audit_events`.
 6. Recarga o cierra y vuelve a iniciar sesión; abre **Mis cotizaciones**.
-7. Cambia el cambio del formulario a `700` y abre el detalle de la cotización guardada: debe conservar 600 y ₡21,000.
+7. Cambia el cambio del formulario a `700` y abre el detalle de la cotización guardada: debe conservar 600 y ₡19,500.
 8. Edita la cotización: aumenta su revisión. En el detalle, abre el historial y comprueba valores anteriores y nuevos.
 
 El guardado automático ocurre 900 ms después del último cambio, cuando existen cliente, productos válidos y peso. El ID permanece igual mientras editas un pedido; los reintentos no crean otro registro. **Limpiar cotización** guarda primero un pedido completo pendiente y comienza otro ID. No se borran cotizaciones históricas.
 
 Los campos vacíos o inválidos no se guardan como pedidos completos. Si falla la red, se muestran el error y los datos siguen en el formulario para reintentar; no cierres esa pestaña antes de guardar. El sistema avisa al intentar salir con cambios completos pendientes. No se promete almacenamiento offline permanente.
 
-Los productos pueden registrar una exención. Actualmente no hay una tasa comercial de IVA definida, igual que en el cotizador original: se conserva esa información sin inventar impuestos ni añadir recargos. El SQL usa las mismas tarifas finales: $15, $30 y $40. El peso cero escrito aplica $15; el peso vacío no permite guardar. Se admiten hasta 100 productos por pedido.
+Los productos pueden registrar una exención. Actualmente no hay una tasa comercial de IVA definida, igual que en el cotizador original: se conserva esa información sin inventar impuestos ni añadir recargos. Las tarifas finales son $15 / ₡7,500, $30 / ₡15,000 y $40 / ₡20,000, según el rango de peso. Solo el subtotal de productos se convierte con el cambio editable. El peso cero escrito aplica $15 / ₡7,500; el peso vacío no permite guardar. Se admiten hasta 100 productos por pedido.
 
 ## 12. Auditoría, filtros y exportación
 

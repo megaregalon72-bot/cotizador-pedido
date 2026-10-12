@@ -27,7 +27,8 @@ async function fixture(page, role = 'seller') {
       const weight = BigInt(p.weight_micros); const shipping = weight <= 10000000n ? 1500n : weight <= 20000000n ? 3000n : 4000n;
       const snapshot = { ...p, items: p.items.map(i => ({ ...i, subtotal_cents: (BigInt(i.unit_price_cents) * BigInt(i.quantity)).toString() })),
         subtotal_cents: subtotal.toString(), shipping_cents: shipping.toString(), total_usd_cents: (subtotal + shipping).toString(),
-        total_crc_cents: (( (subtotal + shipping) * BigInt(p.exchange_rate_cents) + 50n) / 100n).toString(), product_count: p.items.length,
+        subtotal_crc_cents: ((subtotal * BigInt(p.exchange_rate_cents) + 50n) / 100n).toString(), shipping_crc_cents: (shipping * 500n).toString(),
+        total_crc_cents: (((subtotal * BigInt(p.exchange_rate_cents) + 50n) / 100n) + shipping * 500n).toString(), product_count: p.items.length,
         shipping_rate_label: '0–10 kg', tax_note: 'Sin tasa definida.' };
       const previous = records.find(q => q.id === body.p_id);
       const q = { id: body.p_id, number: previous?.number || 'COT-' + String(records.length + 1).padStart(8, '0'), revision: (previous?.revision || 0) + 1,
@@ -61,7 +62,8 @@ async function quote(page, customer = 'María González') {
   await page.locator('#customer-name').fill(customer); await page.locator('.description-input').fill('Camisa');
   await page.locator('.price-input').fill('10'); await page.locator('.quantity-input').fill('2');
   await page.locator('#weight').fill('5'); await page.locator('#exchange-rate').fill('600');
-  await expect(page.locator('#total-crc')).toHaveText('₡21,000');
+  await expect(page.locator('#total-crc')).toHaveText('₡19,500');
+  await expect(page.locator('#shipping-crc')).toHaveText('₡7,500');
   await expect(page.locator('#save-status')).toContainText('guardada', { timeout: 5000 });
 }
 test('Login por usuario, cálculo existente y guardado automático del cliente', async ({ page }) => {
@@ -81,10 +83,53 @@ test('Historial persiste al recargar y sus importes conservan el cambio original
   await page.reload(); await expect(page.locator('#quote-view')).toBeVisible();
   await page.locator('#exchange-rate').fill('700'); await page.locator('[data-view="history"]').click();
   await expect(page.locator('#quotes-body')).toContainText('María González');
-  await expect(page.locator('#quotes-body')).toContainText('₡21,000');
+  await expect(page.locator('#quotes-body')).toContainText('₡19,500');
   await page.getByRole('button', { name: 'Ver detalles', exact: true }).click();
   await expect(page.locator('#quote-detail-content')).toContainText('₡600');
   await expect(page.locator('#quote-detail-content')).toContainText('23:30:00'); expect(f.errors).toEqual([]);
+});
+test('Envío fijo por peso en formulario, total móvil, resumen y cotización guardada', async ({ page }) => {
+  const f = await fixture(page);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async () => { throw new Error('copia manual'); } } });
+    document.execCommand = () => false;
+  });
+  await login(page); await quote(page);
+  for (const [weight, shipping, total] of [['0', '₡7,500', '₡19,500'], ['10', '₡7,500', '₡19,500'], ['10.000001', '₡15,000', '₡27,000'], ['20', '₡15,000', '₡27,000'], ['20.000001', '₡20,000', '₡32,000']]) {
+    await page.locator('#weight').fill(weight);
+    await expect(page.locator('#shipping-crc')).toHaveText(shipping);
+    await expect(page.locator('#summary-shipping-crc')).toHaveText(shipping);
+    await expect(page.locator('#total-crc')).toHaveText(total);
+    await expect(page.locator('#mobile-crc')).toHaveText(total);
+  }
+  await page.locator('#weight').fill('5');
+  await page.locator('#exchange-rate').fill('700');
+  await expect(page.locator('#shipping-crc')).toHaveText('₡7,500');
+  await expect(page.locator('#total-crc')).toHaveText('₡21,500');
+  await expect(page.locator('#save-status')).toContainText('guardada');
+  expect(f.records[0].snapshot.shipping_crc_cents).toBe('750000');
+  expect(f.records[0].snapshot.total_crc_cents).toBe('2150000');
+  await page.locator('#copy-summary').click();
+  await expect(page.locator('#manual-summary')).toHaveValue(/Envío: \$15\.00 \/ ₡7,500/);
+  await expect(page.locator('#manual-summary')).toHaveValue(/₡21,500 CRC/);
+});
+test('Una cotización histórica conserva el importe original hasta editarla y guardar las tarifas actuales', async ({ page }) => {
+  const f = await fixture(page); await login(page); await quote(page);
+  const historical = f.records[0];
+  delete historical.snapshot.shipping_pricing_version;
+  delete historical.snapshot.shipping_crc_cents;
+  historical.snapshot.total_crc_cents = '2100000';
+  await page.locator('[data-view="history"]').click();
+  await expect(page.locator('#quotes-body')).toContainText('₡21,000');
+  await page.getByRole('button', { name: 'Ver detalles', exact: true }).click();
+  await expect(page.locator('#quote-detail-content')).toContainText('₡9,000');
+  await page.getByRole('button', { name: 'Editar cotización', exact: true }).click();
+  await expect(page.locator('#total-crc')).toHaveText('₡19,500');
+  await expect(page.locator('#save-status')).toContainText('tarifas actuales');
+  expect(f.records[0].revision).toBe(1);
+  await page.locator('#save-quote').click();
+  await expect(page.locator('#save-status')).toContainText('revisión 2');
+  expect(f.records[0].snapshot.total_crc_cents).toBe('1950000');
 });
 test('Un aviso de formulario incompleto desaparece al guardar y al restaurar una cotización válida', async ({ page }) => {
   const f = await fixture(page); await login(page);
@@ -151,7 +196,7 @@ test('Editar, cambiar estado, crear copia y exportar CSV usan las operaciones co
   await page.getByRole('button', { name: 'Ver detalles', exact: true }).click();
   await page.getByRole('button', { name: 'Editar cotización', exact: true }).click();
   await page.locator('#exchange-rate').fill('650');
-  await expect(page.locator('#total-crc')).toHaveText('₡22,750');
+  await expect(page.locator('#total-crc')).toHaveText('₡20,500');
   await expect(page.locator('#save-status')).toContainText('revisión 2');
   expect(f.records).toHaveLength(1);
   await page.locator('[data-view="history"]').click();
@@ -169,7 +214,7 @@ test('Editar, cambiar estado, crear copia y exportar CSV usan las operaciones co
   const download = await downloaded;
   expect(download.suggestedFilename()).toBe('cotizaciones.csv');
   const csv = await readFile(await download.path(), 'utf8');
-  expect(csv).toContain('María González'); expect(csv).toContain('"₡22,750"');
+  expect(csv).toContain('María González'); expect(csv).toContain('"₡20,500"');
   expect(csv.split('\r\n')).toHaveLength(3); expect(csv).toContain('COT-00000002');
   expect(f.calls.some(c => c.path === '/rest/v1/rpc/set_quote_status')).toBe(true);
   expect(f.errors).toEqual([]);

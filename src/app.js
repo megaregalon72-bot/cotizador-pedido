@@ -161,7 +161,8 @@ async function openQuote(id) {
   for (const item of s.items) { const row = document.createElement('tr'); [item.description, item.quantity, money(item.unit_price_cents), money(item.subtotal_cents), item.tax_exempt ? 'Sí' : 'No'].forEach(v => cell(row, v)); tbody.append(row); }
   table.append(tbody); wrapper.append(table); content.append(wrapper);
   paragraph(content, `Peso: ${Number(s.weight_micros) / 1000000} kg · ${s.shipping_rate_label}`);
-  paragraph(content, `Subtotal: ${money(s.subtotal_cents)} · Envío: ${money(s.shipping_cents)}`);
+  const shippingCrc = s.shipping_crc_cents ?? ((BigInt(s.shipping_cents) * BigInt(s.exchange_rate_cents) + 50n) / 100n).toString();
+  paragraph(content, `Subtotal: ${money(s.subtotal_cents)} · Envío: ${money(s.shipping_cents)} / ${money(shippingCrc, '₡', false)}`);
   paragraph(content, `TOTAL: ${money(s.total_usd_cents)} USD / ${money(s.total_crc_cents, '₡', false)} CRC`, 'detail-total');
   paragraph(content, s.tax_note);
   const changes = document.createElement('details'); const summary = document.createElement('summary'); summary.textContent = 'Historial de revisiones y valores anteriores'; changes.append(summary);
@@ -189,8 +190,9 @@ async function editQuote(q, copy) {
   await flushSave(); if (!copy) q = await api.getQuote(q.id); state.hydrating = true;
   state.id = copy ? crypto.randomUUID() : q.id; state.revision = copy ? 0 : q.revision;
   $('customer-name').value = q.customer_name; window.Cotizador.loadSnapshot(q.snapshot);
-  state.saved = copy ? '' : JSON.stringify(payload()); $('editing-number').textContent = copy ? 'Copia nueva' : q.number;
-  status('save-status', copy ? 'La copia se guardará como una cotización nueva.' : `${q.number} cargada; los cambios crearán una nueva revisión.`);
+  const legacyPricing = q.snapshot.shipping_pricing_version !== 2;
+  state.saved = copy || legacyPricing ? '' : JSON.stringify(payload()); $('editing-number').textContent = copy ? 'Copia nueva' : q.number;
+  status('save-status', copy ? 'La copia se guardará como una cotización nueva.' : legacyPricing ? `${q.number} cargada con las tarifas actuales; pulsa Guardar ahora para registrar una nueva revisión.` : `${q.number} cargada; los cambios crearán una nueva revisión.`);
   state.hydrating = false; $('quote-detail-dialog').close(); showView('quote'); updateCustomerValidity(); if (copy) queueSave();
 }
 async function loadAudit() {

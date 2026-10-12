@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 
 let db;
+const legacyQuoteId = randomUUID();
 const ids = { admin: '11111111-1111-4111-8111-111111111111', seller: '22222222-2222-4222-8222-222222222222', other: '33333333-3333-4333-8333-333333333333' };
 before(async () => {
   db = new PGlite();
@@ -16,6 +17,8 @@ before(async () => {
   for (const [username, id] of Object.entries(ids)) await db.query('insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)', [id, `${username}@usuarios.cotizador.invalid`, JSON.stringify({ display_name: username, role: 'admin', active: true })]);
   await asService('select public.bootstrap_admin($1)', [ids.admin]);
   for (const key of ['seller', 'other']) await asService("select public.admin_set_profile($1,$2,'seller',true,$3)", [ids.admin, ids[key], key]);
+  await save(ids.seller, legacyQuoteId, 0, payload('60000'));
+  await db.exec(await readFile(new URL('../supabase/migrations/202610110002_envio_fijo.sql', import.meta.url), 'utf8'));
 });
 after(async () => { await db.close(); });
 function asRole(role, id, sql, params = []) {
@@ -60,14 +63,38 @@ test('Reintentos del mismo ID no crean duplicados ni revisiones falsas', async (
   assert.equal((await db.query('select count(*)::int as n from public.quotes where id=$1', [id])).rows[0].n, 1);
   assert.equal((await db.query('select count(*)::int as n from public.quote_revisions where quote_id=$1', [id])).rows[0].n, 1);
 });
+test('El servidor fija el envío por peso y convierte solo productos aunque el cliente envíe otros importes', async () => {
+  for (const rate of ['60000', '70000']) {
+    for (const [weight, shipping] of [['0', '750000'], ['10000000', '750000'], ['10000001', '1500000'], ['20000000', '1500000'], ['20000001', '2000000']]) {
+      const input = payload(rate, 'Envío fijo', undefined, weight);
+      input.shipping_crc_cents = '0'; input.total_crc_cents = '0'; input.shipping_pricing_version = 1;
+      const q = await save(ids.seller, randomUUID(), 0, input);
+      assert.equal(q.snapshot.shipping_crc_cents, shipping);
+      assert.equal(q.snapshot.total_crc_cents, (2000n * BigInt(rate) / 100n + BigInt(shipping)).toString());
+      assert.equal(q.snapshot.shipping_pricing_version, 2);
+    }
+  }
+});
 test('Usuarios duplicados, incluso con mayúsculas, se rechazan en la base', async () => {
   await assert.rejects(() => db.query('insert into auth.users(id,email) values($1,$2)', [randomUUID(), 'SELLER@usuarios.cotizador.invalid']), error => error.code === '23505');
+});
+test('La actualización conserva cotizaciones antiguas y registra nuevas tarifas solo al guardar otra revisión', async () => {
+  const old = (await asUser(ids.seller, 'select public.get_quote($1) as q', [legacyQuoteId])).rows[0].q;
+  assert.equal(old.snapshot.total_crc_cents, '2100000');
+  assert.equal(old.revision, 1);
+  assert.equal(old.revisions.length, 1);
+  const updated = await save(ids.seller, legacyQuoteId, 1, payload('60000'));
+  assert.equal(updated.snapshot.total_crc_cents, '1950000');
+  assert.equal(updated.snapshot.shipping_crc_cents, '750000');
+  assert.equal(updated.revision, 2);
+  const detail = (await asUser(ids.seller, 'select public.get_quote($1) as q', [legacyQuoteId])).rows[0].q;
+  assert.equal(detail.revisions[0].previous_snapshot.total_crc_cents, '2100000');
 });
 test('Cliente, exenciones y tipos de cambio históricos conservan versiones anteriores', async () => {
   const id = randomUUID(); await save(ids.seller, id, 0, payload());
   const changed = payload('60000', 'María González'); changed.items[0].tax_exempt = true;
   const updated = await save(ids.seller, id, 1, changed);
-  assert.equal(updated.snapshot.total_crc_cents, '2100000'); assert.equal(updated.customer_name, 'María González');
+  assert.equal(updated.snapshot.total_crc_cents, '1950000'); assert.equal(updated.customer_name, 'María González');
   assert.equal(updated.snapshot.items[0].tax_exempt, true);
   const detail = (await asUser(ids.seller, 'select public.get_quote($1) as quote', [id])).rows[0].quote;
   assert.equal(detail.revisions.length, 2); assert.equal(detail.revisions[0].previous_snapshot.exchange_rate_cents, '50000');

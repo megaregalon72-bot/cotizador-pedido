@@ -4,13 +4,21 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../script.js', import.meta.url), 'utf8');
-const math = vm.runInNewContext(source.slice(0, source.indexOf('const elements =')) + `\n({parsePrice,parseQuantity,parseWeight,parseExchangeRate,shippingIndex,usd,crc,taxBreakdown,setRate(v){exchangeRateCents=BigInt(v)}})`);
+const math = vm.runInNewContext(source.slice(0, source.indexOf('const elements =')) + `\n({parsePrice,parseQuantity,parseWeight,parseExchangeRate,shippingIndex,usd,crc,quoteTotalCrc,taxBreakdown,setRate(v){exchangeRateCents=BigInt(v)}})`);
 test('Funciones reales del cotizador conservan los resultados comerciales', () => {
   math.setRate('50000');
   assert.equal(math.usd(3500n), '$35.00'); assert.equal(math.crc(3500n), '₡17,500');
   assert.equal(math.crc(8500n), '₡42,500'); assert.equal(math.crc(14000n), '₡70,000');
   math.setRate('60000'); assert.equal(math.crc(3500n), '₡21,000');
   math.setRate('60025'); assert.equal(math.crc(3500n), '₡21,008.75');
+});
+test('Solo los productos se convierten; el envío se suma en colones fijos', () => {
+  for (const [rate, total] of [[50000n, 1750000n], [60000n, 1950000n], [70000n, 2150000n], [60025n, 1950500n]]) {
+    assert.equal(math.quoteTotalCrc(2000n, 750000n, rate), total);
+  }
+  assert.equal(math.quoteTotalCrc(2000n, 1500000n, 60000n), 2700000n);
+  assert.equal(math.quoteTotalCrc(2000n, 2000000n, 60000n), 3200000n);
+  assert.equal(math.quoteTotalCrc(2000n, 750000n, null), null);
 });
 test('Fronteras de envío y entradas inválidas conservan sus validaciones', () => {
   for (const [weight, rate] of [['0', 0], ['10', 0], ['10.000001', 1], ['20', 1], ['20.000001', 2]]) assert.equal(math.shippingIndex(math.parseWeight(weight).value), rate);
