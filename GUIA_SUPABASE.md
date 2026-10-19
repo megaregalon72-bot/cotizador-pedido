@@ -48,6 +48,8 @@ Para las tarifas fijas en colones, aplica después `supabase/migrations/20261011
 
 Aplica también `supabase/migrations/202610110003_reportes.sql` para habilitar los reportes semanales y mensuales por vendedor en Auditoría. Solo administradores activos pueden consultarlos. El reporte usa los registros existentes, fechas de Panamá y semanas de lunes a domingo; no crea cuentas ni modifica cotizaciones.
 
+Para habilitar **Eliminar cotización**, aplica después `supabase/migrations/202610190001_borrar_cotizaciones.sql`. Instala la operación protegida de borrado y actualiza `save_quote` para rechazar autoguardados de IDs ya eliminados. La instalación no elimina registros. Solo administradores activos pueden borrar tras confirmar desde el detalle; se conservan los clientes compartidos y los eventos de auditoría.
+
 ## 4. Usuarios sin correos electrónicos
 
 En **Authentication → Providers**, mantén habilitado el proveedor **Email/password**, pero desactiva **Allow new users to sign up**. No hay registro abierto en esta aplicación.

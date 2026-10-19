@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 const ids = { seller: '22222222-2222-4222-8222-222222222222', admin: '11111111-1111-4111-8111-111111111111' };
 async function fixture(page, role = 'seller') {
   const profile = { id: ids[role], username: role, display_name: role === 'admin' ? 'Administrador' : 'Vendedor', role, active: true };
-  const records = []; const calls = []; const errors = []; let failSave = false;
+  const records = []; const calls = []; const errors = []; const deletedIds = new Set(); let failSave = false;
   page.on('pageerror', error => errors.push(error.message));
   const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
   const token = `${encode({ alg: 'HS256' })}.${encode({ sub: profile.id, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 })}.fixture`;
@@ -22,6 +22,7 @@ async function fixture(page, role = 'seller') {
     if (url.pathname === '/rest/v1/profiles') return reply(url.searchParams.has('id') ? profile : [profile]);
     if (url.pathname === '/rest/v1/rpc/record_session_event') return reply(null);
     if (url.pathname === '/rest/v1/rpc/save_quote') {
+      if (deletedIds.has(body.p_id)) return reply({ message: 'La cotización fue eliminada', code: 'P0002' }, 404);
       if (failSave) { failSave = false; return reply({ message: 'Conexión de prueba interrumpida', code: '08006' }, 503); }
       const p = body.p_payload; const subtotal = p.items.reduce((n, i) => n + BigInt(i.unit_price_cents) * BigInt(i.quantity), 0n);
       const weight = BigInt(p.weight_micros); const shipping = weight <= 10000000n ? 1500n : weight <= 20000000n ? 3000n : 4000n;
@@ -42,6 +43,12 @@ async function fixture(page, role = 'seller') {
       return reply({ total, rows });
     }
     if (url.pathname === '/rest/v1/rpc/get_quote') return reply({ ...records.find(q => q.id === body.p_id), revisions: [] });
+    if (url.pathname === '/rest/v1/rpc/delete_quote') {
+      if (profile.role !== 'admin' || !profile.active) return reply({ message: 'Administrador activo requerido', code: '42501' }, 403);
+      const index = records.findIndex(q => q.id === body.p_id);
+      if (index < 0 || records[index].revision !== body.p_expected_revision) return reply({ message: 'La cotización cambió', code: '40001' }, 409);
+      deletedIds.add(body.p_id); records.splice(index, 1); return reply({ id: body.p_id, deleted: true });
+    }
     if (url.pathname === '/rest/v1/rpc/set_quote_status') { const q = records.find(q => q.id === body.p_id); q.status = body.p_status; q.revision++; return reply(q); }
     if (url.pathname === '/rest/v1/rpc/quote_statistics') return reply({ quotes: records.length, active_users: 1, total_usd_cents: '3500', total_crc_cents: '2100000' });
     if (url.pathname === '/rest/v1/rpc/seller_period_report') return reply([{ seller_id: profile.id, username: profile.username, seller_name: profile.display_name,
@@ -55,7 +62,7 @@ async function fixture(page, role = 'seller') {
     }
     return reply({ message: 'Ruta de prueba no implementada: ' + url.pathname }, 404);
   });
-  return { profile, records, calls, errors, failNextSave: () => { failSave = true; } };
+  return { profile, records, calls, errors, deletedIds, failNextSave: () => { failSave = true; } };
 }
 async function login(page, role = 'seller') {
   await page.goto('/'); await page.locator('#login-username').fill(role); await page.locator('#login-password').fill('fixture-password-123');
@@ -88,8 +95,55 @@ test('Historial persiste al recargar y sus importes conservan el cambio original
   await expect(page.locator('#quotes-body')).toContainText('María González');
   await expect(page.locator('#quotes-body')).toContainText('₡19,500');
   await page.getByRole('button', { name: 'Ver detalles', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Eliminar cotización', exact: true })).toHaveCount(0);
   await expect(page.locator('#quote-detail-content')).toContainText('₡600');
   await expect(page.locator('#quote-detail-content')).toContainText('23:30:00'); expect(f.errors).toEqual([]);
+});
+test('Administrador confirma el borrado completo y el editor no vuelve a guardar la cotización eliminada', async ({ page }) => {
+  const f = await fixture(page, 'admin'); await login(page, 'admin'); await quote(page);
+  await page.locator('[data-view="history"]').click();
+  await page.getByRole('button', { name: 'Ver detalles', exact: true }).click();
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.getByRole('button', { name: 'Eliminar cotización', exact: true }).click();
+  expect(f.records).toHaveLength(1);
+  expect(f.calls.filter(c => c.path === '/rest/v1/rpc/delete_quote')).toHaveLength(0);
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Eliminar cotización', exact: true }).click();
+  await expect(page.locator('#quote-detail-dialog')).not.toBeVisible();
+  await expect(page.locator('#quotes-body tr')).toHaveCount(0);
+  await expect(page.locator('#customer-name')).toHaveValue('');
+  await page.waitForTimeout(1100);
+  expect(f.records).toHaveLength(0);
+  expect(f.calls.filter(c => c.path === '/rest/v1/rpc/save_quote')).toHaveLength(1);
+  await expect(page.locator('#toast')).toHaveText('Cotización eliminada.');
+});
+test('Un conflicto de revisión no elimina datos y permite borrar tras volver a consultar el detalle', async ({ page }) => {
+  const f = await fixture(page, 'admin'); await login(page, 'admin'); await quote(page);
+  await page.locator('[data-view="history"]').click();
+  await page.getByRole('button', { name: 'Ver detalles', exact: true }).click();
+  await expect(page.locator('#quote-detail-dialog')).toBeVisible();
+  f.records[0].revision++;
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Eliminar cotización', exact: true }).click();
+  await expect(page.locator('#app-message')).toContainText('La cotización cambió');
+  expect(f.records).toHaveLength(1);
+  await expect(page.getByRole('button', { name: 'Eliminar cotización', exact: true })).toBeEnabled();
+  await page.locator('#quote-detail-dialog [data-close-dialog]').click();
+  await page.getByRole('button', { name: 'Ver detalles', exact: true }).click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Eliminar cotización', exact: true }).click();
+  await expect(page.locator('#quote-detail-dialog')).not.toBeVisible();
+  expect(f.records).toHaveLength(0);
+});
+test('Un vendedor puede comenzar otra cotización si un administrador eliminó la que tenía abierta', async ({ page }) => {
+  const f = await fixture(page); await login(page); await quote(page);
+  const id = f.records[0].id; f.deletedIds.add(id); f.records.splice(0, 1);
+  await page.locator('.price-input').fill('12');
+  await expect(page.locator('#save-status')).toContainText('Esta cotización fue eliminada');
+  await page.locator('#clear-quote').click();
+  await expect(page.locator('#customer-name')).toHaveValue('');
+  await quote(page);
+  expect(f.records).toHaveLength(1); expect(f.records[0].id).not.toBe(id);
 });
 test('Envío fijo por peso en formulario, total móvil, resumen y cotización guardada', async ({ page }) => {
   const f = await fixture(page);

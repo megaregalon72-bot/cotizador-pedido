@@ -37,6 +37,7 @@ export function saveQuote(id, revision, payload) {
 }
 export function searchQuotes(filters) { return result(supabase.rpc('search_quotes', filters)); }
 export function getQuote(id) { return result(supabase.rpc('get_quote', { p_id: id })); }
+export function deleteQuote(id, revision) { return result(supabase.rpc('delete_quote', { p_id: id, p_expected_revision: revision })); }
 export function setStatus(id, status, revision) {
   return result(supabase.rpc('set_quote_status', { p_id: id, p_status: status, p_expected_revision: revision }));
 }
