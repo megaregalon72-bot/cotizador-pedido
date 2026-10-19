@@ -5,10 +5,10 @@ import { money, dateAndTime, dateRange, quotesCsv, validateCustomer, TIME_ZONE }
 const $ = id => document.getElementById(id);
 const state = { profile: null, view: 'quote', id: crypto.randomUUID(), revision: 0, saved: '', saving: null,
   timer: null, hydrating: false, epoch: 0, quotesPage: 1, quotesTotal: 0, allQuotes: false,
-  auditPage: 1, auditTotal: 0, users: [], detail: null, reportRequest: 0 };
+  auditPage: 1, auditTotal: 0, users: [], detail: null, reportRequest: 0, deletingId: null };
 const labels = { draft: 'Borrador', sent: 'Enviada', confirmed: 'Confirmada', cancelled: 'Cancelada', admin: 'Administrador', seller: 'Vendedor' };
 const actionLabels = { login: 'Inicio de sesión', logout: 'Cierre de sesión', quote_created: 'Cotización creada', quote_updated: 'Cotización modificada',
-  quote_cancelled: 'Cotización cancelada', quote_status_changed: 'Cambio de estado', user_created: 'Usuario creado', user_updated: 'Usuario modificado',
+  quote_cancelled: 'Cotización cancelada', quote_deleted: 'Cotización eliminada', quote_status_changed: 'Cambio de estado', user_created: 'Usuario creado', user_updated: 'Usuario modificado',
   user_deactivated: 'Usuario desactivado', user_reactivated: 'Usuario reactivado', password_reset: 'Contraseña restablecida',
   password_reset_requested: 'Restablecimiento solicitado', admin_bootstrapped: 'Administrador inicial creado', user_provisioned: 'Cuenta técnica creada (inactiva)' };
 
@@ -74,7 +74,7 @@ function updateCustomerValidity(show = false) {
   $('copy-summary').disabled ||= !$('customer-name').value.trim() || Boolean(error);
 }
 function queueSave() {
-  if (!state.profile || state.hydrating) return;
+  if (!state.profile || state.hydrating || state.id === state.deletingId) return;
   updateCustomerValidity(); clearTimeout(state.timer);
   let next; try { next = payload(); } catch { return; }
   if (!next) return;
@@ -85,6 +85,7 @@ function queueSave() {
 async function flushSave(required = false) {
   clearTimeout(state.timer);
   if (!state.profile) throw new Error('Inicia sesión para guardar.');
+  if (state.id === state.deletingId) throw new Error('La cotización se está eliminando.');
   if (state.saving) { await state.saving; return flushSave(required); }
   let next;
   try { next = payload(); } catch (error) { if (required) { updateCustomerValidity(true); throw error; } return; }
@@ -102,19 +103,46 @@ async function flushSave(required = false) {
       status('save-status', `${saved.number} guardada · revisión ${saved.revision}.`);
       if (messageScope === 'save') message('');
     } catch (error) {
-      if (epoch === state.epoch) status('save-status', error.code === '40001' ? 'Otra sesión modificó esta cotización. Abre su versión actual desde el historial antes de editar.' : 'No se pudo guardar. Tus datos siguen en el formulario; pulsa Guardar ahora para reintentar.', true);
+      if (epoch === state.epoch) status('save-status', error.code === 'P0002' ? 'Esta cotización fue eliminada. Pulsa Limpiar cotización para comenzar otra.' : error.code === '40001' ? 'Otra sesión modificó esta cotización. Abre su versión actual desde el historial antes de editar.' : 'No se pudo guardar. Tus datos siguen en el formulario; pulsa Guardar ahora para reintentar.', true);
       throw error;
-    } finally { state.saving = null; $('save-quote').disabled = false; }
+    } finally { state.saving = null; $('save-quote').disabled = state.id === state.deletingId; }
   })();
   await state.saving;
   if (epoch === state.epoch && state.id === id) queueSave();
 }
 async function newQuote() {
-  await flushSave(); state.hydrating = true;
+  try { await flushSave(); } catch (error) { if (error.code !== 'P0002') throw error; }
+  resetQuote();
+}
+function resetQuote() {
+  clearTimeout(state.timer); state.hydrating = true;
   state.id = crypto.randomUUID(); state.revision = 0; state.saved = ''; $('customer-name').value = '';
   window.Cotizador.clearQuote(); $('editing-number').textContent = 'Nueva cotización';
   status('save-status', 'Completa el cliente, los productos y el peso para guardar automáticamente.');
   updateCustomerValidity(); state.hydrating = false;
+}
+async function deleteQuote(q, control) {
+  if (state.profile?.role !== 'admin' || !state.profile.active) throw new Error('Administrador activo requerido.');
+  if (state.deletingId) throw new Error('Espera a que termine la eliminación actual.');
+  if (!window.confirm(`¿Eliminar definitivamente ${q.number} del cliente ${q.customer_name}? Se borrarán la cotización, sus productos y sus revisiones. Quedará constancia en Auditoría. Esta acción no se puede deshacer.`)) return;
+  const epoch = state.epoch; state.deletingId = q.id; control.disabled = true;
+  try {
+    if (state.id === q.id) {
+      clearTimeout(state.timer); $('save-quote').disabled = true;
+      if (state.saving) await state.saving;
+      q.revision = Math.max(q.revision, state.revision);
+    }
+    if (epoch !== state.epoch) return;
+    await api.deleteQuote(q.id, q.revision);
+    if (epoch !== state.epoch) return;
+    if (state.id === q.id) resetQuote();
+    state.detail = null; $('quote-detail-dialog').close(); state.quotesPage = 1;
+    message(''); window.Cotizador.showToast('Cotización eliminada.');
+    await Promise.all([loadQuotes(), loadAudit(), loadSellerReport()]);
+  } catch (error) { if (epoch === state.epoch) throw error; }
+  finally {
+    state.deletingId = null; control.disabled = false; $('save-quote').disabled = Boolean(state.saving);
+  }
 }
 function filters(page = state.quotesPage, size = 20) {
   return { p_customer: $('filter-customer').value.trim(), p_username: state.allQuotes ? $('filter-user').value.trim() : state.profile.username,
@@ -185,6 +213,10 @@ async function openQuote(id) {
     if (state.id === q.id) { state.revision = changed.revision; if (['confirmed', 'cancelled'].includes(changed.status)) await newQuote(); }
     await openQuote(q.id); await loadQuotes();
   }));
+  if (state.profile.role === 'admin') {
+    const remove = button('Eliminar cotización', () => deleteQuote(q, remove));
+    remove.classList.add('danger-button'); actions.append(remove);
+  }
   if (!$('quote-detail-dialog').open) $('quote-detail-dialog').showModal();
 }
 async function editQuote(q, copy) {

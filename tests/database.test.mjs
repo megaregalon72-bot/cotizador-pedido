@@ -20,6 +20,7 @@ before(async () => {
   await save(ids.seller, legacyQuoteId, 0, payload('60000'));
   await db.exec(await readFile(new URL('../supabase/migrations/202610110002_envio_fijo.sql', import.meta.url), 'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/202610110003_reportes.sql', import.meta.url), 'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/202610190001_borrar_cotizaciones.sql', import.meta.url), 'utf8'));
 });
 after(async () => { await db.close(); });
 function asRole(role, id, sql, params = []) {
@@ -192,4 +193,26 @@ test('Reportes semanales y mensuales separan vendedores, revisiones, cancelacion
   await assert.rejects(() => asUser(ids.seller, 'select public.seller_period_report($1,$2,$3)', ['month', ...args]), e => e.code === '42501');
   await assert.rejects(() => report('day'), /Selecciona/);
   await assert.rejects(() => asUser(ids.admin, "select public.seller_period_report('month','2020-01-01','2024-01-01')"), /hasta un año/);
+});
+test('Solo un administrador activo puede borrar una cotización completa; el borrado conserva auditoría y bloquea autoguardados tardíos', async () => {
+  const remove = (actor, id, revision) => asUser(actor, 'select public.delete_quote($1,$2)', [id, revision]);
+  for (const status of ['draft', 'sent', 'confirmed', 'cancelled']) {
+    const id = randomUUID(); const q = await save(ids.seller, id, 0, payload());
+    const clientId = (await db.query('select client_id from public.quotes where id=$1', [id])).rows[0].client_id;
+    let revision = q.revision;
+    if (status !== 'draft') revision = (await asUser(ids.admin, 'select public.set_quote_status($1,$2,$3) as q', [id, status, revision])).rows[0].q.revision;
+    await assert.rejects(() => remove(ids.seller, id, revision), e => e.code === '42501');
+    await assert.rejects(() => asRole('anon', null, 'select public.delete_quote($1,$2)', [id, revision]), e => e.code === '42501');
+    await assert.rejects(() => remove(randomUUID(), id, revision), e => e.code === '42501');
+    await assert.rejects(() => remove(ids.admin, id, revision + 1), e => e.code === '40001');
+    await remove(ids.admin, id, revision);
+    for (const [table, column] of [['quotes', 'id'], ['quote_items', 'quote_id'], ['quote_revisions', 'quote_id']]) {
+      assert.equal((await db.query(`select count(*)::int as n from public.${table} where ${column}=$1`, [id])).rows[0].n, 0);
+    }
+    assert.equal((await db.query('select count(*)::int as n from public.clients where id=$1', [clientId])).rows[0].n, 1);
+    const audit = (await db.query("select actor_id,details from public.audit_events where action='quote_deleted' and resource_id=$1", [id])).rows;
+    assert.equal(audit.length, 1); assert.equal(audit[0].actor_id, ids.admin);
+    await assert.rejects(() => save(ids.seller, id, 0, payload()), e => e.code === 'P0002');
+    await assert.rejects(() => remove(ids.admin, id, revision), e => e.code === 'P0002');
+  }
 });

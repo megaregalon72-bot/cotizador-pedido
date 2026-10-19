@@ -54,6 +54,10 @@ Por ejemplo, $10 × 2 y 5 kg dan $35.00; con cambio 500 son ₡17,500 y con 600 
 
 El IVA sigue sin tasa comercial definida. Las exenciones se registran y no añaden recargos. No se cambian los precios finales existentes.
 
+## Eliminar cotizaciones
+
+Un administrador activo puede eliminar una cotización desde **Mis cotizaciones → Ver detalles → Eliminar cotización**. Para cotizaciones de otros vendedores, usa **Auditoría → Ver todas las cotizaciones**. La confirmación elimina definitivamente la cotización, sus productos y revisiones; conserva los clientes y la auditoría, que registra el administrador responsable. La cotización deja de sumar en los reportes. Si otra sesión la modificó, hay que volver a consultar el detalle antes de confirmar. Un autoguardado tardío no puede recrear el mismo ID eliminado. Esta función requiere `supabase/migrations/202610190001_borrar_cotizaciones.sql`; aplicarla solo instala la función, no borra cotizaciones existentes.
+
 ## Reportes por vendedor
 
 En **Auditoría → Cotizaciones y ventas por vendedor**, selecciona **Mes** o **Semana**, define un rango de hasta un año y pulsa **Consultar reporte**. Los administradores ven nombre/usuario del vendedor, cantidad de cotizaciones, montos históricos USD/CRC, unidades cotizadas, cotizaciones confirmadas y unidades vendidas. Las cotizaciones se agrupan por fecha de creación; las ventas por su última confirmación vigente. Se usan fechas de Panamá y semanas de lunes a domingo. Las revisiones no duplican registros. Los montos y unidades cotizadas excluyen canceladas; las unidades vendidas pertenecen a cotizaciones actualmente confirmadas. La información se conserva en las cotizaciones y revisiones de Supabase, sin mantener copias de los totales que puedan quedar desactualizadas.
