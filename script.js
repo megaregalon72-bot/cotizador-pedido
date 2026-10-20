@@ -163,6 +163,26 @@ function renderTariffs() {
   setText("exchange-header", "$1 = " + rateLabel);
   setText("exchange-note", exchangeRateCents === null ? "Ingresa un tipo de cambio válido." : "Tipo de cambio: $1 USD = " + rateLabel + " CRC");
 }
+let nextPackageId = 0;
+function addPackage(value = "", focus = true) {
+  const list = document.getElementById("package-list");
+  if (list.children.length >= 100) { showToast("Puedes agregar hasta 100 bultos por pedido."); return; }
+  const id = ++nextPackageId;
+  const row = document.createElement("div"); row.className = "shipping-entry package-row";
+  row.innerHTML = `<div class="field"><label class="package-label" for="package-weight-${id}"></label>
+    <div class="input-shell"><input id="package-weight-${id}" class="package-weight" data-error="package-error-${id}" type="text" inputmode="decimal" autocomplete="off" placeholder="0.0" maxlength="20" aria-describedby="package-error-${id} weight-hint"><span class="input-suffix">kg</span></div>
+    <p class="field-error" id="package-error-${id}" hidden></p>
+    <button type="button" class="small-button remove-package">Quitar bulto</button></div>
+    <div class="shipping-price"><span>Tarifa de este bulto</span><strong class="package-usd">$0.00</strong><span class="package-crc">₡0</span></div>`;
+  row.querySelector("input").value = value; list.append(row); renumberPackages(); updateQuote();
+  if (focus) row.querySelector("input").focus();
+}
+function renumberPackages() {
+  document.querySelectorAll(".package-row").forEach((row, index) => {
+    row.querySelector(".package-label").textContent = "Peso del bulto " + (index + 1);
+    row.querySelector(".remove-package")?.setAttribute("aria-label", "Quitar bulto " + (index + 1));
+  });
+}
 function renderTax(grossCents, hasWeight) {
   const container = document.getElementById("tax-breakdown");
   container.hidden = IVA_CONFIG.rateBasisPoints === null || !hasWeight;
@@ -205,24 +225,34 @@ function updateQuote() {
     if (valid) { subtotal += lineCents; units += quantity.value; productCount++; }
     if (!untouched && (!valid || priceError || quantity.error)) hasInvalidProduct = true;
   }
-  const weight = parseWeight(elements.weight.value);
-  showFieldError(elements.weight, weight.error);
-  const hasWeight = weight.value !== null;
-  const rateIndex = hasWeight ? shippingIndex(weight.value) : -1;
-  const shipping = rateIndex < 0 ? 0n : SHIPPING_RATES[rateIndex].priceCents;
-  const shippingCrc = rateIndex < 0 ? 0n : SHIPPING_RATES[rateIndex].priceCrcCents;
-  const hasAmountError = hasInvalidProduct || Boolean(weight.error);
+  const packages = []; const selectedRates = new Set();
+  let shipping = 0n, shippingCrc = 0n, weightMicros = 0n, hasWeight = true, weightError = false;
+  document.querySelectorAll(".package-row").forEach(row => {
+    const input = row.querySelector(".package-weight"); const weight = parseWeight(input.value);
+    showFieldError(input, weight.error); weightError ||= Boolean(weight.error);
+    if (weight.value === null) hasWeight = false;
+    const index = weight.value === null ? -1 : shippingIndex(weight.value);
+    const rate = index < 0 ? null : SHIPPING_RATES[index];
+    const cost = rate?.priceCents ?? 0n, costCrc = rate?.priceCrcCents ?? 0n;
+    row.querySelector(".package-usd").textContent = weight.error ? "—" : usd(cost);
+    row.querySelector(".package-crc").textContent = weight.error ? "—" : formatAmount(costCrc, "₡", false);
+    shipping += cost; shippingCrc += costCrc; weightMicros += weight.value ?? 0n;
+    if (rate) selectedRates.add(index);
+    packages.push({ weightMicros: weight.value, shipping: cost, shippingCrc: costCrc });
+  });
+  setText("package-count", packages.length + (packages.length === 1 ? " bulto" : " bultos"));
+  const hasAmountError = hasInvalidProduct || weightError;
   const hasError = hasAmountError || Boolean(exchangeRate.error);
   const total = subtotal + shipping;
   const totalCrc = quoteTotalCrc(subtotal, shippingCrc);
   const ready = productCount > 0 && hasWeight && !hasError;
-  lastQuote = { subtotal, shipping, shippingCrc, total, totalCrc, units, productCount, ready, exchangeRateCents,
+  lastQuote = { subtotal, shipping, shippingCrc, packages, weightMicros, total, totalCrc, units, productCount, ready, exchangeRateCents,
     customerName: document.getElementById("customer-name")?.value.trim() || "" };
 
   setMoneyPair("products", subtotal, hasInvalidProduct);
   setMoneyPair("summary-products", subtotal, hasInvalidProduct);
-  setMoneyPair("shipping", shipping, Boolean(weight.error), shippingCrc);
-  setMoneyPair("summary-shipping", shipping, Boolean(weight.error), shippingCrc);
+  setMoneyPair("shipping", shipping, weightError, shippingCrc);
+  setMoneyPair("summary-shipping", shipping, weightError, shippingCrc);
   setMoneyPair("total", total, hasAmountError, totalCrc);
   setText("mobile-usd", hasAmountError ? "—" : usd(total) + " USD");
   setText("mobile-crc", hasAmountError || totalCrc === null ? "—" : formatAmount(totalCrc, "₡", false));
@@ -230,17 +260,18 @@ function updateQuote() {
   const unitLabel = integerFormatter.format(units) + (units === 1n ? " unidad" : " unidades");
   setText("unit-count", unitLabel);
   setText("summary-count", productCount ? productCount + (productCount === 1 ? " producto · " : " productos · ") + unitLabel : "Agrega el primer producto");
-  document.querySelectorAll("[data-rate-index]").forEach(row => row.classList.toggle("active", Number(row.dataset.rateIndex) === rateIndex));
-  setText("weight-hint", hasWeight ? "Tarifa aplicada: " + SHIPPING_RATES[rateIndex].label + "." : "Ingresa el peso para aplicar la tarifa.");
+  document.querySelectorAll("[data-rate-index]").forEach(row => row.classList.toggle("active", selectedRates.has(Number(row.dataset.rateIndex))));
+  setText("weight-hint", hasWeight ? "Peso total: " + Number(weightMicros) / 1000000 + " kg. Se suma la tarifa de cada bulto por separado." : "Completa el peso de cada bulto para calcular el envío completo.");
   elements.copy.disabled = !ready;
   elements.status.classList.toggle("error", hasError);
-  elements.status.textContent = hasError ? "Corrige los campos marcados para obtener el total." : ready ? "Lista para compartir con el cliente." : productCount === 0 ? "Agrega productos y peso para completar la cotización." : "Total parcial: falta el peso para incluir el envío.";
+  elements.status.textContent = hasError ? "Corrige los campos marcados para obtener el total." : ready ? "Lista para compartir con el cliente." : productCount === 0 ? "Agrega productos y peso para completar la cotización." : "Total parcial: completa el peso de cada bulto.";
   renderTax(shipping, hasWeight);
   document.dispatchEvent(new CustomEvent("quote:changed"));
 }
 function clearQuote() {
   elements.list.replaceChildren();
   elements.weight.value = "";
+  document.querySelectorAll(".package-row").forEach((row, index) => { if (index) row.remove(); });
   elements.dialog.close();
   document.getElementById("manual-summary").value = "";
   addProduct(false);
@@ -252,6 +283,7 @@ function summaryText(quote) {
     "COTIZACIÓN ESTIMADA", ...(quote.customerName ? ["Cliente: " + quote.customerName] : []), "",
     "Productos (" + integerFormatter.format(quote.units) + " unidades): " + usd(quote.subtotal) + " / " + crc(quote.subtotal, quote.exchangeRateCents),
     "Envío: " + usd(quote.shipping) + " / " + formatAmount(quote.shippingCrc, "₡", false), "",
+    ...quote.packages.map((p, i) => "Bulto " + (i + 1) + ": " + Number(p.weightMicros) / 1000000 + " kg · " + usd(p.shipping) + " / " + formatAmount(p.shippingCrc, "₡", false)), "",
     "TOTAL:", usd(quote.total) + " USD", formatAmount(quote.totalCrc, "₡", false) + " CRC", "",
     "Tipo de cambio: $1 USD = " + formatAmount(quote.exchangeRateCents, "₡", false) + " CRC.",
     "Monto estimado. Confirmar el total final al pasar por caja."
@@ -299,7 +331,13 @@ elements.list.addEventListener("click", event => {
   row.remove(); renumberRows(); updateQuote();
   (focusTarget ? focusTarget.querySelector(".price-input") : document.getElementById("add-product")).focus();
 });
-elements.weight.addEventListener("input", updateQuote);
+document.getElementById("package-list").addEventListener("input", updateQuote);
+document.getElementById("add-package").addEventListener("click", () => addPackage());
+document.getElementById("package-list").addEventListener("click", event => {
+  const remove = event.target.closest(".remove-package"); if (!remove) return;
+  const row = remove.closest(".package-row"); const previous = row.previousElementSibling;
+  row.remove(); renumberPackages(); updateQuote(); previous?.querySelector("input").focus();
+});
 elements.exchangeRate.addEventListener("input", changeExchangeRate);
 document.getElementById("add-product").addEventListener("click", () => addProduct());
 document.getElementById("clear-quote").addEventListener("click", clearQuote);
@@ -322,12 +360,15 @@ function currentSnapshot() {
       unit_price_cents: price.value.toString(), quantity: Number(quantity.value),
       tax_exempt: row.querySelector(".tax-exempt-input").checked }];
   });
-  return { items, exchange_rate_cents: exchangeRateCents.toString(), weight_micros: parseWeight(elements.weight.value).value.toString(), shipping_pricing_version: 2 };
+  return { items, exchange_rate_cents: exchangeRateCents.toString(), weight_micros: lastQuote.weightMicros.toString(), packages: lastQuote.packages.map(p => ({ weight_micros: p.weightMicros.toString() })), shipping_pricing_version: 3 };
 }
 function loadSnapshot(snapshot) {
   elements.list.replaceChildren();
   elements.exchangeRate.value = decimalInput(snapshot.exchange_rate_cents);
-  elements.weight.value = decimalInput(snapshot.weight_micros, 6);
+  document.querySelectorAll(".package-row").forEach((row, index) => { if (index) row.remove(); });
+  const packages = snapshot.packages ?? [{ weight_micros: snapshot.weight_micros }];
+  elements.weight.value = decimalInput(packages[0].weight_micros, 6);
+  for (const p of packages.slice(1)) addPackage(decimalInput(p.weight_micros, 6), false);
   for (const item of snapshot.items) {
     addProduct(false);
     const row = elements.list.lastElementChild;

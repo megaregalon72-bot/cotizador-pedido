@@ -21,6 +21,7 @@ before(async () => {
   await db.exec(await readFile(new URL('../supabase/migrations/202610110002_envio_fijo.sql', import.meta.url), 'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/202610110003_reportes.sql', import.meta.url), 'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/202610190001_borrar_cotizaciones.sql', import.meta.url), 'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/202610190002_varios_bultos.sql', import.meta.url), 'utf8'));
 });
 after(async () => { await db.close(); });
 function asRole(role, id, sql, params = []) {
@@ -73,7 +74,7 @@ test('El servidor fija el envío por peso y convierte solo productos aunque el c
       const q = await save(ids.seller, randomUUID(), 0, input);
       assert.equal(q.snapshot.shipping_crc_cents, shipping);
       assert.equal(q.snapshot.total_crc_cents, (2000n * BigInt(rate) / 100n + BigInt(shipping)).toString());
-      assert.equal(q.snapshot.shipping_pricing_version, 2);
+      assert.equal(q.snapshot.shipping_pricing_version, 3);
     }
   }
 });
@@ -215,4 +216,27 @@ test('Solo un administrador activo puede borrar una cotización completa; el bor
     await assert.rejects(() => save(ids.seller, id, 0, payload()), e => e.code === 'P0002');
     await assert.rejects(() => remove(ids.admin, id, revision), e => e.code === 'P0002');
   }
+});
+test('Bultos de distintos pesos se suman por separado, conservan detalle y no aceptan tarifas del cliente', async () => {
+  const id = randomUUID(); const input = payload('60000');
+  input.weight_micros = '1';
+  input.packages = ['5000000', '15000000', '25000000'].map(weight_micros => ({ weight_micros, shipping_cents: '0', shipping_crc_cents: '0' }));
+  const saved = await save(ids.seller, id, 0, input);
+  assert.equal(saved.snapshot.weight_micros, '45000000');
+  assert.equal(saved.snapshot.package_count, 3);
+  assert.deepEqual(saved.snapshot.packages.map(p => p.shipping_cents), ['1500', '3000', '4000']);
+  assert.equal(saved.snapshot.shipping_cents, '8500'); assert.equal(saved.snapshot.shipping_crc_cents, '4250000');
+  assert.equal(saved.snapshot.total_crc_cents, '5450000');
+  assert.equal((await save(ids.seller, id, 1, input)).revision, 1);
+  await assert.rejects(() => save(ids.seller, id, 1, payload('60000')), /Actualiza la página/);
+  const updated = structuredClone(input); updated.packages.splice(1, 1);
+  const revision = await save(ids.seller, id, 1, updated);
+  assert.equal(revision.revision, 2); assert.equal(revision.snapshot.shipping_crc_cents, '2750000');
+  const detail = (await asUser(ids.seller, 'select public.get_quote($1) as q', [id])).rows[0].q;
+  assert.equal(detail.revisions[0].previous_snapshot.packages.length, 3);
+  for (const packages of [[], null, [{ weight_micros: '-1' }], [{ weight_micros: '1000000000001' }], [{}], Array(101).fill({ weight_micros: '1' })]) {
+    await assert.rejects(() => save(ids.seller, randomUUID(), 0, { ...payload(), packages }));
+  }
+  const zero = await save(ids.seller, randomUUID(), 0, { ...payload(), packages: [{ weight_micros: '0' }, { weight_micros: '0' }] });
+  assert.equal(zero.snapshot.shipping_cents, '3000');
 });

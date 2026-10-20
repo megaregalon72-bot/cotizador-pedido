@@ -54,6 +54,12 @@ Por ejemplo, $10 × 2 y 5 kg dan $35.00; con cambio 500 son ₡17,500 y con 600 
 
 El IVA sigue sin tasa comercial definida. Las exenciones se registran y no añaden recargos. No se cambian los precios finales existentes.
 
+## Envíos con varios bultos
+
+En **Bultos y envíos**, escribe el peso del primer bulto y usa **Agregar bulto** para cada paquete adicional del mismo pedido y cliente. Cada bulto aplica su tarifa por separado: 0–10 kg, $15 / ₡7,500; más de 10–20 kg, $30 / ₡15,000; más de 20 kg, $40 / ₡20,000. Por ejemplo, 5 kg + 15 kg son $45 / ₡22,500 de envío; no se cobra una sola tarifa sobre los 20 kg combinados. Puedes quitar bultos adicionales. Se admiten hasta 100 y todos deben tener peso válido para guardar o copiar. Un peso escrito de cero conserva la tarifa del primer rango.
+
+El desglose se guarda dentro de la misma cotización y aparece en su detalle, edición y resumen para copiar. Los envíos siguen fijos en colones; solo los productos usan el cambio editable. Las cotizaciones anteriores se conservan y se abren con su único bulto. La actualización `supabase/migrations/202610190002_varios_bultos.sql` reemplaza la función de futuros guardados, mantiene la protección de cotizaciones eliminadas y no modifica registros existentes.
+
 ## Eliminar cotizaciones
 
 Un administrador activo puede eliminar una cotización desde **Mis cotizaciones → Ver detalles → Eliminar cotización**. Para cotizaciones de otros vendedores, usa **Auditoría → Ver todas las cotizaciones**. La confirmación elimina definitivamente la cotización, sus productos y revisiones; conserva los clientes y la auditoría, que registra el administrador responsable. La cotización deja de sumar en los reportes. Si otra sesión la modificó, hay que volver a consultar el detalle antes de confirmar. Un autoguardado tardío no puede recrear el mismo ID eliminado. Esta función requiere `supabase/migrations/202610190001_borrar_cotizaciones.sql`; aplicarla solo instala la función, no borra cotizaciones existentes.
