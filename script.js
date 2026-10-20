@@ -280,13 +280,17 @@ function clearQuote() {
 }
 function summaryText(quote) {
   return [
-    "COTIZACIÓN ESTIMADA", ...(quote.customerName ? ["Cliente: " + quote.customerName] : []), "",
+    quote.customerName ? "¡Hola, " + quote.customerName + "! 😊" : "¡Hola! 😊", "",
+    "Con mucho gusto te compartimos la cotización de tu pedido en Mega Regalon:", "",
     "Productos (" + integerFormatter.format(quote.units) + " unidades): " + usd(quote.subtotal) + " / " + crc(quote.subtotal, quote.exchangeRateCents),
     "Envío: " + usd(quote.shipping) + " / " + formatAmount(quote.shippingCrc, "₡", false), "",
     ...quote.packages.map((p, i) => "Bulto " + (i + 1) + ": " + Number(p.weightMicros) / 1000000 + " kg · " + usd(p.shipping) + " / " + formatAmount(p.shippingCrc, "₡", false)), "",
-    "TOTAL:", usd(quote.total) + " USD", formatAmount(quote.totalCrc, "₡", false) + " CRC", "",
+    "Total estimado de tu pedido:", usd(quote.total) + " USD", formatAmount(quote.totalCrc, "₡", false) + " CRC", "",
     "Tipo de cambio: $1 USD = " + formatAmount(quote.exchangeRateCents, "₡", false) + " CRC.",
-    "Monto estimado. Confirmar el total final al pasar por caja."
+    "El monto es estimado; te confirmaremos el total final al pasar por caja.", "",
+    "Si tienes alguna duda sobre tu cotización, escríbenos. ¡Con gusto te ayudamos!", "",
+    "¡Gracias por confiar en nosotros! 💛",
+    "MEGA REGALON TU MEJOR OPCION"
   ].join("\n");
 }
 function showToast(message) {
