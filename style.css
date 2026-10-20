@@ -160,6 +160,8 @@ strong, dd, .line-money, .shipping-price { overflow-wrap: anywhere; font-variant
 .nav-button.active { background: var(--ink); color: white; border-color: var(--ink); }
 .small-button:hover:not(:disabled), .nav-button:hover { border-color: #b47e00; }
 .small-button.danger-button { color: #ad1f2a; border-color: #ad1f2a; }
+.package-row + .package-row { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 16px; }
+.remove-package { margin-top: 8px; }
 .session-controls { font-size: .8125rem; color: var(--muted); }
 .app-message { max-width: 1104px; margin: 0 auto; padding: 14px 18px; border-radius: 10px; background: #fff6d7; overflow-wrap: anywhere; }
 .app-message.error { background: #fff0f1; color: #ad1f2a; }

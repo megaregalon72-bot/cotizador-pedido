@@ -74,20 +74,22 @@
       </section>
 
       <section class="panel shipping-panel" aria-labelledby="shipping-heading">
-        <div class="panel-heading"><div class="heading-group"><span class="step" aria-hidden="true">02</span><h2 id="shipping-heading">Peso y envío</h2></div></div>
-        <div class="shipping-entry">
+        <div class="panel-heading"><div class="heading-group"><span class="step" aria-hidden="true">02</span><h2 id="shipping-heading">Bultos y envíos</h2></div></div>
+        <div id="package-list"><div class="shipping-entry package-row">
           <div class="field">
-            <label for="weight">Peso total del pedido</label>
-            <div class="input-shell"><input id="weight" type="text" inputmode="decimal" autocomplete="off" placeholder="0.0" aria-describedby="weight-error weight-hint" maxlength="20"><span class="input-suffix">kg</span></div>
+            <label for="weight" class="package-label">Peso del bulto 1</label>
+            <div class="input-shell"><input id="weight" class="package-weight" data-error="weight-error" type="text" inputmode="decimal" autocomplete="off" placeholder="0.0" aria-describedby="weight-error weight-hint" maxlength="20"><span class="input-suffix">kg</span></div>
             <p class="field-error" id="weight-error" hidden></p>
           </div>
-          <div class="shipping-price"><span>Costo de envío</span><strong id="shipping-usd">$0.00</strong><span id="shipping-crc">₡0</span></div>
-        </div>
+          <div class="shipping-price"><span>Tarifa de este bulto</span><strong class="package-usd">$0.00</strong><span class="package-crc">₡0</span></div>
+        </div></div>
+        <button type="button" class="button add-button" id="add-package">+ Agregar bulto</button>
+        <div class="product-subtotal"><div>Total de envíos<br><span id="package-count">1 bulto</span></div><div><strong id="shipping-usd">$0.00</strong><span id="shipping-crc">₡0</span></div></div>
         <p class="field-hint" id="weight-hint">Ingresa el peso para aplicar la tarifa.</p>
         <div class="tariff-table-wrapper">
           <table class="tariff-table">
             <caption>Tarifas de envío</caption>
-            <thead><tr><th scope="col">Peso del pedido</th><th scope="col">USD</th><th scope="col">CRC</th></tr></thead>
+            <thead><tr><th scope="col">Peso de cada bulto</th><th scope="col">USD</th><th scope="col">CRC</th></tr></thead>
             <tbody id="tariff-body"></tbody>
           </table>
         </div>

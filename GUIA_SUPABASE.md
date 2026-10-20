@@ -50,6 +50,8 @@ Aplica también `supabase/migrations/202610110003_reportes.sql` para habilitar l
 
 Para habilitar **Eliminar cotización**, aplica después `supabase/migrations/202610190001_borrar_cotizaciones.sql`. Instala la operación protegida de borrado y actualiza `save_quote` para rechazar autoguardados de IDs ya eliminados. La instalación no elimina registros. Solo administradores activos pueden borrar tras confirmar desde el detalle; se conservan los clientes compartidos y los eventos de auditoría.
 
+Para varios bultos, aplica después `supabase/migrations/202610190002_varios_bultos.sql` y luego publica la interfaz correspondiente. Si las actualizaciones anteriores ya están instaladas, ejecuta solo este archivo nuevo. Cada bulto tiene peso y tarifa calculada por el servidor; el total de envío suma todas las tarifas fijas. Las cotizaciones antiguas permanecen intactas. Un navegador con la interfaz anterior debe actualizarse antes de editar una cotización que ya tenga varios bultos.
+
 ## 4. Usuarios sin correos electrónicos
 
 En **Authentication → Providers**, mantén habilitado el proveedor **Email/password**, pero desactiva **Allow new users to sign up**. No hay registro abierto en esta aplicación.

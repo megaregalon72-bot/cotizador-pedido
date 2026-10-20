@@ -89,7 +89,7 @@ async function flushSave(required = false) {
   if (state.saving) { await state.saving; return flushSave(required); }
   let next;
   try { next = payload(); } catch (error) { if (required) { updateCustomerValidity(true); throw error; } return; }
-  if (!next) { if (required) throw new Error('Completa al menos un producto válido y el peso.'); return; }
+  if (!next) { if (required) throw new Error('Completa al menos un producto válido y el peso de cada bulto.'); return; }
   const hash = JSON.stringify(next);
   if (hash === state.saved) { if (messageScope === 'save') message(''); return; }
   const id = state.id; const epoch = state.epoch; const revision = state.revision;
@@ -192,6 +192,7 @@ async function openQuote(id) {
   paragraph(content, `Peso: ${Number(s.weight_micros) / 1000000} kg · ${s.shipping_rate_label}`);
   const shippingCrc = s.shipping_crc_cents ?? ((BigInt(s.shipping_cents) * BigInt(s.exchange_rate_cents) + 50n) / 100n).toString();
   paragraph(content, `Subtotal: ${money(s.subtotal_cents)} · Envío: ${money(s.shipping_cents)} / ${money(shippingCrc, '₡', false)}`);
+  if (s.packages) s.packages.forEach((p, i) => paragraph(content, `Bulto ${i + 1}: ${Number(p.weight_micros) / 1000000} kg · ${money(p.shipping_cents)} / ${money(p.shipping_crc_cents, '₡', false)}`));
   paragraph(content, `TOTAL: ${money(s.total_usd_cents)} USD / ${money(s.total_crc_cents, '₡', false)} CRC`, 'detail-total');
   paragraph(content, s.tax_note);
   const changes = document.createElement('details'); const summary = document.createElement('summary'); summary.textContent = 'Historial de revisiones y valores anteriores'; changes.append(summary);
@@ -223,7 +224,7 @@ async function editQuote(q, copy) {
   await flushSave(); if (!copy) q = await api.getQuote(q.id); state.hydrating = true;
   state.id = copy ? crypto.randomUUID() : q.id; state.revision = copy ? 0 : q.revision;
   $('customer-name').value = q.customer_name; window.Cotizador.loadSnapshot(q.snapshot);
-  const legacyPricing = q.snapshot.shipping_pricing_version !== 2;
+  const legacyPricing = q.snapshot.shipping_pricing_version !== 3;
   state.saved = copy || legacyPricing ? '' : JSON.stringify(payload()); $('editing-number').textContent = copy ? 'Copia nueva' : q.number;
   status('save-status', copy ? 'La copia se guardará como una cotización nueva.' : legacyPricing ? `${q.number} cargada con las tarifas actuales; pulsa Guardar ahora para registrar una nueva revisión.` : `${q.number} cargada; los cambios crearán una nueva revisión.`);
   state.hydrating = false; $('quote-detail-dialog').close(); showView('quote'); updateCustomerValidity(); if (copy) queueSave();

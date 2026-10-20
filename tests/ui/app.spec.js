@@ -25,8 +25,12 @@ async function fixture(page, role = 'seller') {
       if (deletedIds.has(body.p_id)) return reply({ message: 'La cotización fue eliminada', code: 'P0002' }, 404);
       if (failSave) { failSave = false; return reply({ message: 'Conexión de prueba interrumpida', code: '08006' }, 503); }
       const p = body.p_payload; const subtotal = p.items.reduce((n, i) => n + BigInt(i.unit_price_cents) * BigInt(i.quantity), 0n);
-      const weight = BigInt(p.weight_micros); const shipping = weight <= 10000000n ? 1500n : weight <= 20000000n ? 3000n : 4000n;
-      const snapshot = { ...p, items: p.items.map(i => ({ ...i, subtotal_cents: (BigInt(i.unit_price_cents) * BigInt(i.quantity)).toString() })),
+      const packages = (p.packages ?? [{ weight_micros: p.weight_micros }]).map(pack => {
+        const weight = BigInt(pack.weight_micros); const cost = weight <= 10000000n ? 1500n : weight <= 20000000n ? 3000n : 4000n;
+        return { ...pack, shipping_cents: cost.toString(), shipping_crc_cents: (cost * 500n).toString() };
+      });
+      const shipping = packages.reduce((sum, pack) => sum + BigInt(pack.shipping_cents), 0n);
+      const snapshot = { ...p, packages, package_count: packages.length, items: p.items.map(i => ({ ...i, subtotal_cents: (BigInt(i.unit_price_cents) * BigInt(i.quantity)).toString() })),
         subtotal_cents: subtotal.toString(), shipping_cents: shipping.toString(), total_usd_cents: (subtotal + shipping).toString(),
         subtotal_crc_cents: ((subtotal * BigInt(p.exchange_rate_cents) + 50n) / 100n).toString(), shipping_crc_cents: (shipping * 500n).toString(),
         total_crc_cents: (((subtotal * BigInt(p.exchange_rate_cents) + 50n) / 100n) + shipping * 500n).toString(), product_count: p.items.length,
@@ -170,11 +174,48 @@ test('Envío fijo por peso en formulario, total móvil, resumen y cotización gu
   await expect(page.locator('#manual-summary')).toHaveValue(/Envío: \$15\.00 \/ ₡7,500/);
   await expect(page.locator('#manual-summary')).toHaveValue(/₡21,500 CRC/);
 });
+test('Un pedido suma varios bultos, conserva el desglose al editar y recalcula al quitar uno', async ({ page }) => {
+  const f = await fixture(page);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async () => { throw new Error('copia manual'); } } });
+    document.execCommand = () => false;
+  });
+  await login(page); await quote(page);
+  await page.locator('#add-package').click();
+  await expect(page.locator('#copy-summary')).toBeDisabled();
+  await page.locator('.package-weight').nth(1).fill('15');
+  await expect(page.locator('#shipping-usd')).toHaveText('$45.00');
+  await expect(page.locator('#shipping-crc')).toHaveText('₡22,500');
+  await page.locator('#add-package').click();
+  await page.locator('.package-weight').nth(2).fill('25');
+  await expect(page.locator('#total-crc')).toHaveText('₡54,500');
+  await expect(page.locator('#save-status')).toContainText('guardada');
+  expect(f.records).toHaveLength(1); expect(f.records[0].snapshot.packages).toHaveLength(3);
+  await page.locator('#copy-summary').click();
+  await expect(page.locator('#manual-summary')).toHaveValue(/Bulto 2: 15 kg · \$30\.00 \/ ₡15,000/);
+  await page.locator('#close-copy-dialog').click();
+  await page.locator('[data-view="history"]').click();
+  await page.getByRole('button', { name: 'Ver detalles', exact: true }).click();
+  await expect(page.locator('#quote-detail-content')).toContainText('Bulto 3: 25 kg');
+  await page.getByRole('button', { name: 'Editar cotización', exact: true }).click();
+  await expect(page.locator('.package-weight')).toHaveCount(3);
+  await expect(page.locator('.package-weight').nth(1)).toHaveValue('15.000000');
+  await page.getByRole('button', { name: 'Quitar bulto 2', exact: true }).click();
+  await expect(page.locator('#shipping-crc')).toHaveText('₡27,500');
+  await expect(page.locator('#total-crc')).toHaveText('₡39,500');
+  await page.locator('#exchange-rate').fill('700');
+  await expect(page.locator('#total-crc')).toHaveText('₡41,500');
+  await expect(page.locator('#shipping-crc')).toHaveText('₡27,500');
+  await expect(page.locator('#save-status')).toContainText('guardada');
+  expect(f.records[0].snapshot.packages).toHaveLength(2);
+});
 test('Una cotización histórica conserva el importe original hasta editarla y guardar las tarifas actuales', async ({ page }) => {
   const f = await fixture(page); await login(page); await quote(page);
   const historical = f.records[0];
   delete historical.snapshot.shipping_pricing_version;
   delete historical.snapshot.shipping_crc_cents;
+  delete historical.snapshot.packages;
+  delete historical.snapshot.package_count;
   historical.snapshot.total_crc_cents = '2100000';
   await page.locator('[data-view="history"]').click();
   await expect(page.locator('#quotes-body')).toContainText('₡21,000');
@@ -191,7 +232,7 @@ test('Una cotización histórica conserva el importe original hasta editarla y g
 test('Un aviso de formulario incompleto desaparece al guardar y al restaurar una cotización válida', async ({ page }) => {
   const f = await fixture(page); await login(page);
   await page.locator('#save-quote').click();
-  await expect(page.locator('#app-message')).toContainText('Completa al menos un producto válido y el peso.');
+  await expect(page.locator('#app-message')).toContainText('Completa al menos un producto válido y el peso de cada bulto.');
   await expect(page.locator('#toast')).toBeHidden();
   await quote(page);
   await expect(page.locator('#app-message')).toBeHidden();
